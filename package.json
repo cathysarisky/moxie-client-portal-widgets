@@ -1,0 +1,15 @@
+{
+  "name": "moxie-portal-snippets",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Drop-in customisations for the Moxie client portal: one parent script plus pick-and-choose snippets.",
+  "author": "Cathy Sarisky, Spectral Web Services",
+  "license": "MIT",
+  "scripts": {
+    "pretest": "for f in core/*.js snippets/*.js; do [ -e \"$f\" ] || continue; node --check \"$f\" || exit 1; done",
+    "test": "node --test test/*.test.js"
+  },
+  "devDependencies": {
+    "jsdom": "^30.1.3"
+  }
+}
