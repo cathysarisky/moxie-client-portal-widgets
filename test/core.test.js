@@ -577,3 +577,14 @@ test('a snippet whose onlyFor stops matching is cleaned up while the others keep
   assert.equal(tncStyles(), 0);
   assert.deepEqual(log, ['everyone', 'tnc cleanup', 'everyone']);
 });
+
+test('onDom also fires when a class changes, such as the sidebar collapsing', async () => {
+  const t = boot({ html: '<div class="brand-zone"></div>' });
+  let calls = 0;
+  t.MoxiePortal.ready((portal) => { portal.onDom(() => { calls++; }); });
+  await tick();
+  calls = 0;
+  t.document.querySelector('.brand-zone').classList.add('is-collapsed');
+  await tick();
+  assert.equal(calls, 1);
+});

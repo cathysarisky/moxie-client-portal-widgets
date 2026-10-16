@@ -63,14 +63,15 @@
       var btn = document.querySelector('.mp-tasks-link') || buildButton(projectsBtn);
       if (projectsBtn.nextElementSibling !== btn) projectsBtn.after(btn);
 
-      // Follow the sidebar's collapsed (icon-only) mode.
+      // Follow the sidebar's collapsed (icon-only) mode. Classes are only written when
+      // they change, because class changes wake the parent's DOM hook.
       var collapsed = projectsBtn.classList.contains('is-collapsed');
-      btn.classList.toggle('is-collapsed', collapsed);
+      if (btn.classList.contains('is-collapsed') !== collapsed) btn.classList.toggle('is-collapsed', collapsed);
       var label = btn.querySelector('.nav-label');
       if (label) label.style.display = collapsed ? 'none' : '';
 
       var activeNow = onTasksView();
-      btn.classList.toggle('is-active', activeNow);
+      if (btn.classList.contains('is-active') !== activeNow) btn.classList.toggle('is-active', activeNow);
       if (activeNow) {
         btn.setAttribute('aria-current', 'page');
         document.documentElement.setAttribute('data-mp-tasks-active', '');

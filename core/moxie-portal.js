@@ -566,7 +566,7 @@
         place();
         runHooks(domHooks, 'onDom');
       });
-    }).observe(document.body, { childList: true, subtree: true });
+    }).observe(document.body, { childList: true, subtree: true, attributes: true, attributeFilter: ['class'] });
 
     router.afterEach(function (to, from) {
       setTimeout(function () {

@@ -95,7 +95,7 @@ has to act"; it lives here because two cards use it.
 4. Poll every 100 ms, up to 100 tries, for `document.querySelector('#app').__vue__`
    having `$store`, `$router` and a truthy `$store.getters.getClientId`.
 5. Install one `router.afterEach` and one `MutationObserver` on `document.body`
-   (childList, subtree) debounced with `requestAnimationFrame`.
+   (childList, subtree, and `class` attribute changes) debounced with `requestAnimationFrame`.
 6. Watch `store.getters.getClientId + '|' + JSON.stringify(customValues)`. On change
    run the deactivate/activate cycle below. Run it once at start.
 
@@ -137,7 +137,10 @@ One object, passed to every snippet. Grouped by purpose.
 **Change hooks** (removed automatically on deactivation)
 - `onRoute(fn)`: `fn(to, from)` after each navigation, in a `setTimeout(0)` so the
   portal has rendered.
-- `onDom(fn)`: `fn()` at most once per animation frame after any DOM mutation.
+- `onDom(fn)`: `fn()` at most once per animation frame after any child-list change or
+  any `class` attribute change (the portal signals state such as the collapsed menu
+  with classes). Snippets must write classes only when they change, to avoid waking
+  the hook from inside it.
 
 **Styling**
 - `style(css)`: appends a `<style>` to `<head>`; removed on deactivation.
@@ -235,10 +238,13 @@ Every snippet is an IIFE with its editable constants at the top, then
 `MoxiePortal.ready(function (portal) { ... })`. Behaviour is identical to today unless
 noted.
 
-**logo.js** (constants `LOGO_CHANGE`, `LOGO_WIDTH`, `LOGO_HEIGHT`, `ONLY_FOR`)
-`'none'` hides `img.brand-logo` via CSS; a URL swaps the image's `src` and re-asserts it
-from `onDom` when the portal re-renders the sidebar, restoring the original on cleanup;
-`''` leaves the logo alone. `LOGO_WIDTH` / `LOGO_HEIGHT` (optional, bare numbers mean px)
+**logo.js** (constants `LOGO_CHANGE`, `LOGO_COLLAPSED`, `LOGO_WIDTH`, `LOGO_HEIGHT`, `ONLY_FOR`)
+The portal keeps one `img.brand-logo` inside `.brand-zone` and changes its `src` when the
+menu collapses; `.brand-zone` then carries `is-collapsed` (observed 2026-10-15).
+`LOGO_CHANGE` applies while expanded, `LOGO_COLLAPSED` while collapsed (`null` = same as
+`LOGO_CHANGE`). `'none'` hides via a state-scoped CSS rule; a URL swaps `src` for that
+state and re-asserts it from `onDom`, remembering the portal's own image per state and
+restoring it on cleanup; `''` leaves the portal's image alone. `LOGO_WIDTH` / `LOGO_HEIGHT` (optional, bare numbers mean px)
 size the logo, replacement or original, with `max-width: 100%` so it stays inside the
 sidebar and `auto` on the other side so proportions hold when only one is given.
 

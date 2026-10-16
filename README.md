@@ -98,13 +98,14 @@ Each snippet has its editable text and settings at the top of its file. Every on
 
 ### logo
 
-Hides the workspace logo above the left menu, or shows a different image in its place, with optional sizing.
+Hides the workspace logo above the left menu, or shows a different image in its place, with optional sizing. The portal switches to a separate small image while the menu is collapsed, and that one has its own setting.
 
 | Setting | Default | Meaning |
 |---|---|---|
-| `LOGO_CHANGE` | `'none'` | `'none'` hides the logo; a URL such as `'https://example.com/logo.png'` shows that image instead; `''` leaves the workspace logo alone |
-| `LOGO_WIDTH` | `''` | Logo width, e.g. `160` (pixels) or `'80%'`; `''` keeps the portal's sizing |
-| `LOGO_HEIGHT` | `''` | Logo height, e.g. `48` (pixels); `''` keeps the portal's sizing. Sizes apply to a replacement logo or to the original one, and the image keeps its proportions when only one side is given |
+| `LOGO_CHANGE` | `'none'` | Logo while the menu is expanded. `'none'` hides it; a URL such as `'https://example.com/logo.png'` shows that image instead; `''` leaves the workspace logo alone |
+| `LOGO_COLLAPSED` | `null` | Small logo while the menu is collapsed. `null` does the same as `LOGO_CHANGE`; `'none'` hides it; a URL shows that image, for example a square icon; `''` leaves the portal's own small image alone |
+| `LOGO_WIDTH` | `''` | Expanded logo width, e.g. `160` (pixels) or `'80%'`; `''` keeps the portal's sizing |
+| `LOGO_HEIGHT` | `''` | Expanded logo height, e.g. `48` (pixels); `''` keeps the portal's sizing. Sizes apply to a replacement logo or to the original one, and the image keeps its proportions when only one side is given |
 
 ### custom-css
 
@@ -231,7 +232,7 @@ The bundled files stick to ES5 (`var`, `function`) so they paste anywhere withou
 | Member | Meaning |
 |---|---|
 | `portal.onRoute(fn)` | `fn(to, from)` after each navigation |
-| `portal.onDom(fn)` | `fn()` at most once per frame after the page changes |
+| `portal.onDom(fn)` | `fn()` at most once per frame after the page changes, including a class change such as the menu collapsing |
 
 **Styling**
 
