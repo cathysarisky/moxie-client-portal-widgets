@@ -182,8 +182,9 @@ retries.
   - `replaces` (main only, optional): the Vue component name of a built-in card to
     hide and sit after: `'Tickets'` (built-in Requests card) or `'Deliverables'`
     (built-in "Projects" card, which is really tasks awaiting approval).
-  - `render(card)`: fills the given empty `<section class="mp-card">`. May return a
-    Promise. Resolving to `false` means "do not show this card".
+  - `render()`: returns the card element (normally built with `portal.card`), or a
+    Promise of one. Returning `false` means "do not show this card". The parent sets
+    the element's id and `mp-card` class.
 
 Mounting behaviour, owned by the parent:
 
@@ -191,8 +192,8 @@ Mounting behaviour, owned by the parent:
   Off Home, all mounted cards are removed and hidden built-ins unhidden.
 - A **home refresh** happens on activation while on Home, on navigation to Home, and
   after `tasks.open` resolves. It calls `data.refresh()`, then for every mounted card
-  creates a fresh detached section, calls `render`, and on resolution swaps it into
-  place of the previous node (or drops the card if `render` resolved `false` or
+  calls `render`, and on resolution swaps the returned element into place of the
+  previous node (or drops the card if `render` resolved `false` or
   rejected, logging a warning). Cards never show empty or half-filled.
 - The `top` row is `<div id="mp-top">` inserted before the first of
   `.action-dashboard, .dashboard-loading, .dashboard-state, .upcoming-dashboard`

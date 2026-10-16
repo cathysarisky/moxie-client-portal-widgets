@@ -249,10 +249,6 @@
       });
     }
 
-    // Replaced in the home-page section.
-    function place() {}
-    function refreshHome() {}
-
     // --- cached data, per client ---------------------------------------------
     var cache = {};
 
@@ -357,11 +353,147 @@
       }
     };
 
+    // --- home page cards -------------------------------------------------------
+    var mounts = [];   // { id, slot, replaces, render, node, seq }
+
+    function onHomeRoute() { return router.currentRoute.path === '/welcome'; }
+
+    // Finds one of the portal's own Home cards by Vue component name. "Tickets" is the
+    // built-in Requests card; "Deliverables" without taskMode is the built-in "Projects"
+    // card (tasks awaiting approval).
+    function builtInCard(dashboard, componentName) {
+      var cards = dashboard.querySelectorAll(':scope > .portal-action-card');
+      for (var i = 0; i < cards.length; i++) {
+        for (var vm = cards[i].__vue__; vm && vm.$el === cards[i]; vm = vm.$parent) {
+          if (vm.$options.name === componentName && !vm.taskMode) return cards[i];
+        }
+      }
+      return null;
+    }
+
+    function setHidden(wanted) {
+      var current = document.querySelectorAll('[data-mp-hidden]');
+      for (var i = 0; i < current.length; i++) {
+        if (wanted.indexOf(current[i]) === -1) current[i].removeAttribute('data-mp-hidden');
+      }
+      wanted.forEach(function (node) {
+        if (!node.hasAttribute('data-mp-hidden')) node.setAttribute('data-mp-hidden', '');
+      });
+    }
+
+    function unplace(m) {
+      if (m.node) { m.node.remove(); m.node = null; }
+    }
+
+    function clearHome() {
+      mounts.forEach(function (m) { m.seq++; unplace(m); });
+      ['mp-top', 'mp-grid'].forEach(function (id) {
+        var node = document.getElementById(id);
+        if (node) node.remove();
+      });
+      setHidden([]);
+    }
+
+    // Puts rendered cards where they belong. Cheap and idempotent; runs after every DOM change.
+    function place() {
+      if (!onHomeRoute()) { clearHome(); return; }
+      var root = document.querySelector('.welcome-page');
+      if (!root) return;
+      var anchor = root.querySelector(':scope > .action-dashboard, :scope > .dashboard-loading, :scope > .dashboard-state, :scope > .upcoming-dashboard');
+      var dashboard = root.querySelector(':scope > .action-dashboard');
+      var hidden = [];
+
+      var topCards = mounts.filter(function (m) { return m.slot === 'top' && m.node; });
+      var top = document.getElementById('mp-top');
+      if (!topCards.length) {
+        if (top) top.remove();
+        top = null;
+      } else {
+        if (!top) { top = el('div'); top.id = 'mp-top'; }
+        if (top.parentElement !== root) root.insertBefore(top, anchor);
+        topCards.forEach(function (m, i) {
+          if (top.children[i] !== m.node) top.insertBefore(m.node, top.children[i] || null);
+        });
+      }
+
+      var mainCards = mounts.filter(function (m) { return m.slot === 'main' && m.node; });
+      var grid = document.getElementById('mp-grid');
+      if (dashboard || !mainCards.length) {
+        if (grid) grid.remove();
+        grid = null;
+      }
+      if (dashboard) {
+        var prev = null;
+        mainCards.forEach(function (m) {
+          var builtIn = m.replaces ? builtInCard(dashboard, m.replaces) : null;
+          if (builtIn) {
+            hidden.push(builtIn);
+            if (builtIn.nextElementSibling !== m.node) builtIn.after(m.node);
+          } else if (prev) {
+            if (prev.nextElementSibling !== m.node) prev.after(m.node);
+          } else if (dashboard.firstElementChild !== m.node) {
+            dashboard.prepend(m.node);
+          }
+          prev = m.node;
+        });
+      } else if (mainCards.length) {
+        if (!grid) { grid = el('div'); grid.id = 'mp-grid'; }
+        if (top) {
+          if (top.nextElementSibling !== grid) top.after(grid);
+        } else if (grid.parentElement !== root) {
+          root.insertBefore(grid, anchor);
+        }
+        mainCards.forEach(function (m, i) {
+          if (grid.children[i] !== m.node) grid.insertBefore(m.node, grid.children[i] || null);
+        });
+      }
+      setHidden(hidden);
+    }
+
+    // Renders a card off-screen, then swaps it in, so cards never show half-filled.
+    function renderCard(m) {
+      var seq = ++m.seq;
+      Promise.resolve().then(function () { return m.render(); }).then(function (node) {
+        if (seq !== m.seq) return;
+        if (!node) { unplace(m); place(); return; }
+        node.id = m.id;
+        node.classList.add('mp-card');
+        var old = m.node;
+        m.node = node;
+        if (old && old.parentNode) old.parentNode.replaceChild(node, old);
+        place();
+      }, function (err) {
+        if (seq !== m.seq) return;
+        warn('card ' + m.id + ' failed', err);
+        unplace(m);
+        place();
+      });
+    }
+
+    function renderHome() { if (onHomeRoute()) mounts.forEach(renderCard); }
+    function refreshHome() { cache = {}; renderHome(); }
+
+    var home = {
+      mount: function (spec) {
+        var m = {
+          id: spec.id,
+          slot: spec.slot === 'top' ? 'top' : 'main',
+          replaces: spec.replaces || null,
+          render: spec.render,
+          node: null,
+          seq: 0
+        };
+        mounts.push(m);
+        if (active && onHomeRoute()) renderCard(m);
+      },
+      refresh: refreshHome
+    };
+
     portal = {
       store: store, router: router, go: go,
       clientId: clientId, clientValues: clientValues, user: user, features: features,
       api: api, style: style, onRoute: onRoute, onDom: onDom,
-      data: data, tasks: tasks,
+      data: data, tasks: tasks, home: home,
       el: el, svg: svg, button: button, card: card, row: row, empty: empty, footer: footer,
       norm: norm, timeAgo: timeAgo, formatDue: formatDue, icons: ICONS
     };
@@ -390,6 +522,8 @@
       finished.styles.forEach(function (node) { node.remove(); });
       routeHooks = [];
       domHooks = [];
+      clearHome();
+      mounts = [];
       cache = {};
     }
 
