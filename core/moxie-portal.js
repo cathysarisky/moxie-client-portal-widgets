@@ -234,15 +234,18 @@
     var routeHooks = [];
     var domHooks = [];
 
+    // Registrations are only accepted while a matching client is active, so there is
+    // always an activation to clean them up. Late calls (after the client changed) are dropped.
     function style(css) {
       var node = document.createElement('style');
       node.textContent = css;
+      if (!active) return node;
       document.head.appendChild(node);
-      if (active) active.styles.push(node);
+      active.styles.push(node);
       return node;
     }
-    function onRoute(fn) { routeHooks.push(fn); }
-    function onDom(fn) { domHooks.push(fn); }
+    function onRoute(fn) { if (active) routeHooks.push(fn); }
+    function onDom(fn) { if (active) domHooks.push(fn); }
     function runHooks(list, what, args) {
       list.slice().forEach(function (fn) {
         try { fn.apply(null, args || []); } catch (err) { warn(what + ' hook failed', err); }
@@ -462,7 +465,8 @@
         m.node = node;
         if (old && old.parentNode) old.parentNode.replaceChild(node, old);
         place();
-      }, function (err) {
+      }).then(null, function (err) {
+        // Catches render rejections and anything the swap above threw (e.g. a non-element).
         if (seq !== m.seq) return;
         warn('card ' + m.id + ' failed', err);
         unplace(m);
@@ -470,11 +474,12 @@
       });
     }
 
-    function renderHome() { if (onHomeRoute()) mounts.forEach(renderCard); }
+    function renderHome() { if (active && onHomeRoute()) mounts.forEach(renderCard); }
     function refreshHome() { cache = {}; renderHome(); }
 
     var home = {
       mount: function (spec) {
+        if (!active) return;
         var m = {
           id: spec.id,
           slot: spec.slot === 'top' ? 'top' : 'main',

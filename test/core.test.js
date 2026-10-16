@@ -472,3 +472,35 @@ test('home.refresh and tasks.open re-render mounted cards', async () => {
   await tick();
   assert.equal(renders, 3);
 });
+
+test('a render that resolves to something other than an element is reported and leaves no card', async () => {
+  const t = boot({ html: WELCOME_WITHOUT_DASHBOARD });
+  t.MoxiePortal.ready((portal) => {
+    portal.home.mount({ id: 'mp-bad', slot: 'top', render: () => 'not an element' });
+  });
+  await tick();
+  assert.equal(t.document.getElementById('mp-bad'), null);
+  assert.equal(t.document.getElementById('mp-top'), null);
+  assert.equal(t.warns.length, 1);
+  assert.match(String(t.warns[0][0]), /card mp-bad failed/);
+});
+
+test('registrations made after the client stopped matching are dropped', async () => {
+  const t = boot({ html: WELCOME_WITHOUT_DASHBOARD });
+  let portalRef;
+  t.MoxiePortal.ready((portal) => { portalRef = portal; });
+  t.store.state.clientPortalContext.client.customValues = [];
+  t.store.notify();
+  let domCalls = 0;
+  portalRef.style('.late { color: red; }');
+  portalRef.onDom(() => { domCalls++; });
+  portalRef.home.mount({ id: 'mp-late', slot: 'top', render: () => portalRef.card({ title: 'Late', icon: portalRef.icons.tasks }) });
+  t.router.push('/projects');
+  t.router.push('/welcome');
+  t.document.body.appendChild(t.document.createElement('p'));
+  await tick();
+  assert.equal([...t.document.head.querySelectorAll('style')].some((s) => s.textContent.includes('.late')), false);
+  assert.equal(domCalls, 0);
+  assert.equal(t.document.getElementById('mp-late'), null);
+  assert.equal(t.warns.length, 0);
+});

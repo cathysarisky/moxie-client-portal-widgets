@@ -137,6 +137,8 @@ A snippet is a self-contained function registered with `MoxiePortal.ready`. It r
 })();
 ```
 
+Register styles, hooks and cards while your function runs, or from a promise that resolves soon after. A registration that arrives after the viewer has already switched to a different client is dropped rather than carried over, so nothing from one client leaks into another.
+
 The bundled files stick to ES5 (`var`, `function`) so they paste anywhere without a build step. Your own snippets can use whatever JavaScript your clients' browsers support. A snippet that throws is logged to the browser console as `[MoxiePortal] snippet failed` and does not stop the others.
 
 ### The `portal` object

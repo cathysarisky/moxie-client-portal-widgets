@@ -223,7 +223,7 @@ Every snippet is an IIFE with its editable constants at the top, then
 `MoxiePortal.ready(function (portal) { ... })`. Behaviour is identical to today unless
 noted.
 
-**sidebar-restyle.js** (constants `SIDEBAR_GREEN`, `ACTIVE_STRIPE`, `HIDE_LOGO`)
+**sidebar-restyle.js** (constants `SIDEBAR_COLOR`, `ACTIVE_STRIPE`, `HIDE_LOGO`)
 Calls `portal.style` with the sidebar background, active-stripe colour, hidden
 `.brand-logo`, and the `.brand-zone` background at `min-width: 600px`. Because
 activation already implies the client matches, no html attribute gate is needed.
