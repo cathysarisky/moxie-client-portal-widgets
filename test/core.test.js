@@ -315,6 +315,7 @@ test('shared card CSS is injected once with mp- names and nothing swc', () => {
   assert.ok(style);
   assert.match(style.textContent, /\.mp-card \{/);
   assert.match(style.textContent, /\[data-mp-hidden\]/);
+  assert.match(style.textContent, /#mp-home \.mp-row \{/);
   assert.doesNotMatch(t.source, /swc/i);
 });
 
@@ -345,56 +346,71 @@ function mountAll(portal, delay) {
     const node = portal.card({ title: text, icon: portal.icons.tasks, count: 0 });
     return delay ? new Promise((r) => setTimeout(() => r(node), delay)) : node;
   };
-  portal.home.mount({ id: 'mp-waiting', slot: 'top', render: make('Waiting') });
-  portal.home.mount({ id: 'mp-recent', slot: 'top', render: make('Recent') });
-  portal.home.mount({ id: 'mp-requests', slot: 'main', replaces: 'Tickets', render: make('Requests') });
-  portal.home.mount({ id: 'mp-projects', slot: 'main', replaces: 'Deliverables', render: make('Projects') });
+  portal.home.mount({ name: 'waiting', render: make('Waiting') });
+  portal.home.mount({ name: 'recent', render: make('Recent') });
+  portal.home.mount({ name: 'requests', replaces: 'Tickets', render: make('Requests') });
+  portal.home.mount({ name: 'projects', replaces: 'Deliverables', render: make('Projects') });
 }
 
 const ids = (parent) => [...parent.children].map((c) => c.id);
+const rows = (t) => [...t.document.querySelectorAll('#mp-home > .mp-row')].map(ids);
+const pageOrder = (t) => [...t.document.querySelector('.welcome-page').children].map((c) => c.id || c.className);
 
-test('top cards sit in a row before the dashboard; main cards replace their built-ins', async () => {
+test('cards form the rows named in HOME_CARDS above the dashboard, and replaced built-ins are hidden', async () => {
   const t = boot({ html: WELCOME_WITH_DASHBOARD });
   tagBuiltIns(t);
   t.MoxiePortal.ready((portal) => { mountAll(portal); });
   await tick();
-  const home = t.document.querySelector('.welcome-page');
-  assert.deepEqual([...home.children].map((c) => c.id || c.className), ['', 'mp-top', 'action-dashboard']);
-  assert.deepEqual(ids(t.document.getElementById('mp-top')), ['mp-waiting', 'mp-recent']);
-  assert.deepEqual(ids(home.querySelector('.action-dashboard')), ['builtin-tickets', 'mp-requests', 'builtin-deliverables', 'mp-projects']);
+  assert.deepEqual(pageOrder(t), ['', 'mp-home', 'action-dashboard']);
+  assert.deepEqual(rows(t), [['mp-waiting', 'mp-recent'], ['mp-requests', 'mp-projects']]);
+  assert.deepEqual(ids(t.document.querySelector('.action-dashboard')), ['builtin-tickets', 'builtin-deliverables']);
   assert.ok(t.document.getElementById('builtin-tickets').hasAttribute('data-mp-hidden'));
   assert.ok(t.document.getElementById('builtin-deliverables').hasAttribute('data-mp-hidden'));
-  assert.equal(t.document.getElementById('mp-grid'), null);
 });
 
-test('without a dashboard, main cards go into a grid after the top row', async () => {
+test('without a dashboard the block still sits above the rest of the page', async () => {
   const t = boot({ html: WELCOME_WITHOUT_DASHBOARD });
   t.MoxiePortal.ready((portal) => { mountAll(portal); });
   await tick();
-  const home = t.document.querySelector('.welcome-page');
-  assert.deepEqual([...home.children].map((c) => c.id || c.className), ['', 'mp-top', 'mp-grid', 'upcoming-dashboard']);
-  assert.deepEqual(ids(t.document.getElementById('mp-grid')), ['mp-requests', 'mp-projects']);
+  assert.deepEqual(pageOrder(t), ['', 'mp-home', 'upcoming-dashboard']);
+  assert.equal(t.warns.length, 0);
 });
 
-test('a main card whose built-in is missing goes first; the next one follows it', async () => {
-  const t = boot({ html: WELCOME_WITH_DASHBOARD.replace('<div class="portal-action-card" id="builtin-tickets"></div>', '') });
-  tagBuiltIns(t);
+test('HOME_CARDS controls order and rows; a bare name is a row by itself; unlisted cards follow one per row', async () => {
+  const t = boot({ html: WELCOME_WITHOUT_DASHBOARD, homeCards: ['recent', ['projects', 'waiting']] });
   t.MoxiePortal.ready((portal) => { mountAll(portal); });
   await tick();
-  assert.deepEqual(ids(t.document.querySelector('.action-dashboard')), ['mp-requests', 'builtin-deliverables', 'mp-projects']);
+  assert.deepEqual(rows(t), [['mp-recent'], ['mp-projects', 'mp-waiting'], ['mp-requests']]);
 });
 
-test('a render that returns false hides the card and empty rows are removed', async () => {
-  const t = boot({ html: WELCOME_WITHOUT_DASHBOARD });
+test('a listed card with no snippet is skipped and a duplicate name is used once', async () => {
+  const t = boot({ html: WELCOME_WITHOUT_DASHBOARD, homeCards: [['waiting', 'nonexistent'], ['projects'], ['waiting']] });
   t.MoxiePortal.ready((portal) => {
-    portal.home.mount({ id: 'mp-waiting', slot: 'top', render: () => false });
-    portal.home.mount({ id: 'mp-requests', slot: 'main', render: () => Promise.reject(new Error('nope')) });
+    portal.home.mount({ name: 'waiting', render: () => portal.card({ title: 'W', icon: portal.icons.tasks }) });
+    portal.home.mount({ name: 'recent', render: () => portal.card({ title: 'R', icon: portal.icons.tasks }) });
   });
   await tick();
-  assert.equal(t.document.getElementById('mp-waiting'), null);
-  assert.equal(t.document.getElementById('mp-top'), null);
-  assert.equal(t.document.getElementById('mp-grid'), null);
+  assert.deepEqual(rows(t), [['mp-waiting'], ['mp-recent']]);
+});
+
+test('a render that returns false hides the card and its row shrinks; a rejected render is reported', async () => {
+  const t = boot({ html: WELCOME_WITHOUT_DASHBOARD });
+  t.MoxiePortal.ready((portal) => {
+    portal.home.mount({ name: 'waiting', render: () => false });
+    portal.home.mount({ name: 'recent', render: () => portal.card({ title: 'R', icon: portal.icons.tasks }) });
+    portal.home.mount({ name: 'requests', render: () => Promise.reject(new Error('nope')) });
+  });
+  await tick();
+  assert.deepEqual(rows(t), [['mp-recent']]);
+  assert.equal(t.warns.length, 1);
   assert.match(String(t.warns[0][0]), /card mp-requests failed/);
+});
+
+test('when every card is hidden there is no block at all', async () => {
+  const t = boot({ html: WELCOME_WITHOUT_DASHBOARD });
+  t.MoxiePortal.ready((portal) => { portal.home.mount({ name: 'waiting', render: () => false }); });
+  await tick();
+  assert.equal(t.document.getElementById('mp-home'), null);
 });
 
 test('cards are re-inserted after the portal re-renders the page', async () => {
@@ -402,13 +418,21 @@ test('cards are re-inserted after the portal re-renders the page', async () => {
   tagBuiltIns(t);
   t.MoxiePortal.ready((portal) => { mountAll(portal); });
   await tick();
-  t.document.getElementById('mp-top').remove();
-  t.document.getElementById('mp-requests').remove();
+  t.document.getElementById('mp-home').remove();
   t.document.getElementById('builtin-tickets').removeAttribute('data-mp-hidden');
   await tick();
-  assert.deepEqual(ids(t.document.getElementById('mp-top')), ['mp-waiting', 'mp-recent']);
-  assert.deepEqual(ids(t.document.querySelector('.action-dashboard')), ['builtin-tickets', 'mp-requests', 'builtin-deliverables', 'mp-projects']);
+  assert.deepEqual(rows(t), [['mp-waiting', 'mp-recent'], ['mp-requests', 'mp-projects']]);
   assert.ok(t.document.getElementById('builtin-tickets').hasAttribute('data-mp-hidden'));
+});
+
+test('the block moves back above the dashboard if the page re-renders around it', async () => {
+  const t = boot({ html: WELCOME_WITH_DASHBOARD });
+  tagBuiltIns(t);
+  t.MoxiePortal.ready((portal) => { mountAll(portal); });
+  await tick();
+  t.document.querySelector('.welcome-page').appendChild(t.document.getElementById('mp-home'));
+  await tick();
+  assert.deepEqual(pageOrder(t), ['', 'mp-home', 'action-dashboard']);
 });
 
 test('leaving Home removes cards and unhides built-ins; returning re-renders with fresh data', async () => {
@@ -416,7 +440,7 @@ test('leaving Home removes cards and unhides built-ins; returning re-renders wit
   tagBuiltIns(t);
   let renders = 0;
   t.MoxiePortal.ready((portal) => {
-    portal.home.mount({ id: 'mp-requests', slot: 'main', replaces: 'Tickets', render: () => {
+    portal.home.mount({ name: 'requests', replaces: 'Tickets', render: () => {
       renders++;
       return portal.data.tickets().then(() => portal.card({ title: 'Requests', icon: portal.icons.ticket, count: 0 }));
     } });
@@ -426,6 +450,7 @@ test('leaving Home removes cards and unhides built-ins; returning re-renders wit
   t.router.push('/projects');
   await tick();
   assert.equal(t.document.getElementById('mp-requests'), null);
+  assert.equal(t.document.getElementById('mp-home'), null);
   assert.equal(t.document.getElementById('builtin-tickets').hasAttribute('data-mp-hidden'), false);
   t.router.push('/welcome');
   await tick();
@@ -441,7 +466,7 @@ test('a render that resolves after leaving Home is discarded', async () => {
   await tick(120);
   assert.equal(t.warns.length, 0);
   assert.equal(t.document.getElementById('mp-waiting'), null);
-  assert.equal(t.document.getElementById('mp-top'), null);
+  assert.equal(t.document.getElementById('mp-home'), null);
 });
 
 test('a client change removes mounted cards and drops in-flight renders', async () => {
@@ -452,7 +477,7 @@ test('a client change removes mounted cards and drops in-flight renders', async 
   await tick(120);
   assert.equal(t.warns.length, 0);
   assert.equal(t.document.querySelector('.mp-card'), null);
-  assert.equal(t.document.getElementById('mp-top'), null);
+  assert.equal(t.document.getElementById('mp-home'), null);
 });
 
 test('home.refresh and tasks.open re-render mounted cards', async () => {
@@ -461,7 +486,7 @@ test('home.refresh and tasks.open re-render mounted cards', async () => {
   let portalRef;
   t.MoxiePortal.ready((portal) => {
     portalRef = portal;
-    portal.home.mount({ id: 'mp-waiting', slot: 'top', render: () => { renders++; return portal.card({ title: 'W', icon: portal.icons.tasks, count: 0 }); } });
+    portal.home.mount({ name: 'waiting', render: () => { renders++; return portal.card({ title: 'W', icon: portal.icons.tasks, count: 0 }); } });
   });
   await tick();
   assert.equal(renders, 1);
@@ -476,13 +501,23 @@ test('home.refresh and tasks.open re-render mounted cards', async () => {
 test('a render that resolves to something other than an element is reported and leaves no card', async () => {
   const t = boot({ html: WELCOME_WITHOUT_DASHBOARD });
   t.MoxiePortal.ready((portal) => {
-    portal.home.mount({ id: 'mp-bad', slot: 'top', render: () => 'not an element' });
+    portal.home.mount({ name: 'bad', render: () => 'not an element' });
   });
   await tick();
   assert.equal(t.document.getElementById('mp-bad'), null);
-  assert.equal(t.document.getElementById('mp-top'), null);
+  assert.equal(t.document.getElementById('mp-home'), null);
   assert.equal(t.warns.length, 1);
   assert.match(String(t.warns[0][0]), /card mp-bad failed/);
+});
+
+test('a mount without a name is reported and ignored', async () => {
+  const t = boot({ html: WELCOME_WITHOUT_DASHBOARD });
+  t.MoxiePortal.ready((portal) => {
+    portal.home.mount({ render: () => portal.card({ title: 'X', icon: portal.icons.tasks }) });
+  });
+  await tick();
+  assert.equal(t.document.getElementById('mp-home'), null);
+  assert.match(String(t.warns[0][0]), /home.mount needs a name/);
 });
 
 test('registrations made after the client stopped matching are dropped', async () => {
@@ -494,7 +529,7 @@ test('registrations made after the client stopped matching are dropped', async (
   let domCalls = 0;
   portalRef.style('.late { color: red; }');
   portalRef.onDom(() => { domCalls++; });
-  portalRef.home.mount({ id: 'mp-late', slot: 'top', render: () => portalRef.card({ title: 'Late', icon: portalRef.icons.tasks }) });
+  portalRef.home.mount({ name: 'late', render: () => portalRef.card({ title: 'Late', icon: portalRef.icons.tasks }) });
   t.router.push('/projects');
   t.router.push('/welcome');
   t.document.body.appendChild(t.document.createElement('p'));

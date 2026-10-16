@@ -49,7 +49,6 @@ snippets/home-waiting.js      "Waiting on you" card
 snippets/home-recent.js       "Recently updated" card
 snippets/home-requests.js     "Requests" card with every open ticket
 snippets/home-projects.js     real "Projects" card
-build.sh                      concatenates parent + chosen snippets to stdout
 test/core.test.js             jsdom tests for the parent
 package.json                  devDependency jsdom, `npm test` runs node --test
 README.md                     for other Moxie users
@@ -68,7 +67,12 @@ Naming: the global is `MoxiePortal`. CSS classes and element ids use the prefix
 ```js
 var CLIENT_FILTER = { ClientType: 'TEST' }; // null = every client
 var WAITING_STATUSES = ['Wait on client', 'Ready for approval'];
+var HOME_CARDS = [['waiting', 'recent'], ['requests', 'projects']];
 ```
+
+`HOME_CARDS` (added 2026-10-15 at Cathy's request, replacing fixed slots) arranges Home
+cards by name. Each inner array is one row; a bare string is a row of one. Cards named
+but not mounted are skipped; mounted cards not named follow, one per row.
 
 `CLIENT_FILTER` maps client custom-field mapping keys to required values. A client
 passes when every listed key matches after trimming and lower-casing. `null` passes
@@ -175,37 +179,37 @@ retries.
   strings.
 
 **Home page** (`portal.home.*`)
-- `mount({ id, slot, replaces, render })`
-  - `id`: element id, unique per card, e.g. `mp-waiting`.
-  - `slot`: `'top'` (the side-by-side row above the dashboard) or `'main'` (inside the
-    portal's dashboard, or in a fallback grid when the portal shows none).
-  - `replaces` (main only, optional): the Vue component name of a built-in card to
-    hide and sit after: `'Tickets'` (built-in Requests card) or `'Deliverables'`
-    (built-in "Projects" card, which is really tasks awaiting approval).
+- `mount({ name, replaces, render })`
+  - `name`: the card's name in `HOME_CARDS`; the element id becomes `mp-<name>`. A mount
+    without a name is warned about and ignored.
+  - `replaces` (optional): the Vue component name of a built-in card to hide while this
+    card is shown: `'Tickets'` (built-in Requests card) or `'Deliverables'` (built-in
+    "Projects" card, which is really tasks awaiting approval).
   - `render()`: returns the card element (normally built with `portal.card`), or a
     Promise of one. Returning `false` means "do not show this card". The parent sets
     the element's id and `mp-card` class.
+- `refresh()`: clears the data cache and re-renders every mounted card when on Home.
 
 Mounting behaviour, owned by the parent:
 
-- Home is `router.currentRoute.path === '/welcome'` with a `.welcome-page` element.
+- Home is `router.currentRoute.path === '/welcome'`; placement waits for `.welcome-page`.
   Off Home, all mounted cards are removed and hidden built-ins unhidden.
-- A **home refresh** happens on activation while on Home, on navigation to Home, and
-  after `tasks.open` resolves. It calls `data.refresh()`, then for every mounted card
-  calls `render`, and on resolution swaps the returned element into place of the
-  previous node (or drops the card if `render` resolved `false` or
-  rejected, logging a warning). Cards never show empty or half-filled.
-- The `top` row is `<div id="mp-top">` inserted before the first of
+- A **home refresh** happens on navigation to Home and after `tasks.open` resolves. It
+  clears the cache, then for every mounted card calls `render`, and on resolution swaps
+  the returned element into place of the previous node (or drops the card if `render`
+  resolved `false` or rejected, logging a warning). Cards never show empty or half-filled.
+- All cards live in one `<div id="mp-home">` inserted before the first of
   `.action-dashboard, .dashboard-loading, .dashboard-state, .upcoming-dashboard`
-  (appended to `.welcome-page` when none is present). Cards sit in registration order. The row is removed when it has no cards.
-- `main` cards: when `:scope > .action-dashboard` exists, a card whose `replaces`
-  built-in is found gets that built-in marked `data-mp-hidden` and sits right after it;
-  otherwise it sits after the previously mounted main card, or at the start of the
-  dashboard when it is the first. When there is no dashboard, main cards go into
-  `<div id="mp-grid">` placed after the top row (or before the anchor when there is no
-  top row), in registration order. The grid is removed when it has no cards.
-- Built-in cards are found as today: walk `.portal-action-card` children of the
-  dashboard and match `vm.$options.name === replaces && !vm.taskMode`.
+  (appended to `.welcome-page` when none is present) and moved back there if the page
+  re-renders around it. Inside it, one `<div class="mp-row">` per row from `HOME_CARDS`
+  (rows with no rendered card are omitted), then one row per mounted card the list does
+  not name, in mount order. Rows use flex-wrap: each card takes at least 320px and grows,
+  so cards in a row split its width and stack on narrow screens. The block is removed
+  when no card is rendered.
+- Built-in cards are found as before: walk `.portal-action-card` children of the
+  dashboard and match `vm.$options.name === replaces && !vm.taskMode`. While a card with
+  `replaces` is rendered, its built-in is marked `data-mp-hidden`. Our cards are never
+  inserted into Moxie's dashboard.
 - The `onDom` observer re-asserts placement (re-insert detached cards, re-hide
   built-ins) without re-rendering.
 
@@ -213,7 +217,7 @@ Mounting behaviour, owned by the parent:
 
 The `.swc-card` rules from `portal-home.js` move to the parent as `.mp-card`,
 `.mp-head`, `.mp-title`, `.mp-icon`, `.mp-count`, `.mp-open`, `.mp-list`, `.mp-dot`,
-`.mp-empty`, `.mp-footer`, plus the `#mp-top` / `#mp-grid` grid rules and
+`.mp-empty`, `.mp-footer`, plus the `#mp-home` / `.mp-row` flex rules and
 `[data-mp-hidden] { display: none !important; }`. The two-line clamp for the recent
 card's meta stays in that snippet.
 
@@ -223,11 +227,17 @@ Every snippet is an IIFE with its editable constants at the top, then
 `MoxiePortal.ready(function (portal) { ... })`. Behaviour is identical to today unless
 noted.
 
-**sidebar-restyle.js** (constants `SIDEBAR_COLOR`, `ACTIVE_STRIPE`, `HIDE_LOGO`)
-Calls `portal.style` with the sidebar background, active-stripe colour, hidden
-`.brand-logo`, and the `.brand-zone` background at `min-width: 600px`. Because
-activation already implies the client matches, no html attribute gate is needed.
-Change: `HIDE_LOGO` becomes a boolean so users who only want the colour can keep their logo.
+**sidebar-restyle.js** (constants `SIDEBAR_COLOR`, `ACTIVE_STRIPE`, `LOGO_CHANGE`, `LOGO_WIDTH`, `LOGO_HEIGHT`)
+Calls `portal.style` with the sidebar background, active-stripe colour, and the
+`.brand-zone` background at `min-width: 600px`. Because activation already implies the
+client matches, no html attribute gate is needed.
+Change: `LOGO_CHANGE` replaces the old always-hide behaviour. `'none'` hides
+`img.brand-logo` via CSS; a URL swaps the image's `src` and re-asserts it from `onDom`
+when the portal re-renders the sidebar, restoring the original on cleanup; `''` leaves
+the logo alone. (Cathy, 2026-10-15; an earlier draft used a boolean `HIDE_LOGO`.)
+`LOGO_WIDTH` / `LOGO_HEIGHT` (optional, bare numbers mean px) size the logo, replacement
+or original, with `max-width: 100%` so it stays inside the sidebar and `auto` on the
+other side so proportions hold when only one is given.
 
 **nav-tasks-link.js** (constants `TASKS_LABEL`)
 On activation loads `data.projects()`, picks the first `active` project, and keeps a
@@ -238,26 +248,26 @@ CSS is added with `portal.style` using `html[data-mp-tasks-active]`. Returns a c
 that removes the button and attribute.
 
 **home-waiting.js** (constants `TITLE`, `EMPTY`, `BOARD_LINK`)
-Mounts in `top`. Render: `data.waitingTasks()` and `data.projects()`; header with
+Mounts as `waiting`. Render: `data.waitingTasks()` and `data.projects()`; header with
 `icons.tasks` and the count, no open arrow; rows with meta `status · project · due`
 and the status colour dot, clicking calls `tasks.open(item)`; a footer per visible
 project linking to its board, naming the project only when there is more than one.
 Resolves `false` when `features().projectsEnabled` is false.
 
 **home-recent.js** (constants `TITLE`, `DAYS`, `EMPTY`, `MAX_ROWS`)
-Mounts in `top`. Render: `data.tasks()` and `user()`; the `latestActivity`,
+Mounts as `recent`. Render: `data.tasks()` and `user()`; the `latestActivity`,
 `tidyName`, `plainText`, `truncate` logic stays here; rows show `who what · ago`
 and open the task panel. Resolves `false` when projects are disabled.
 
 **home-requests.js** (constants `TITLE`, `EMPTY`, `MAX_ROWS`)
-Mounts in `main`, `replaces: 'Tickets'`. Render: `data.tickets()` and
+Mounts as `requests`, `replaces: 'Tickets'`. Render: `data.tickets()` and
 `data.ticketSettings()`; header arrow to `/requests`; rows with meta
 `#number · status · New reply · updated ago`, status dot colour from ticket settings
 (falls back to `var(--v-accent-base)`), clicking goes to `/requests/<id>`. Resolves
 `false` when tickets are disabled.
 
 **home-projects.js** (constants `TITLE`, `MAX_ROWS`)
-Mounts in `main`, `replaces: 'Deliverables'`. Render: `data.projects()` filtered to
+Mounts as `projects`, `replaces: 'Deliverables'`. Render: `data.projects()` filtered to
 active and sorted by name, plus `data.waitingTasks()` for the per-project waiting
 count; header arrow to `/projects`; rows with meta `lifecycle · due · N waiting on you`,
 clicking goes to `/projects/<id>` with `?v=tasks` when `tasks.visible(p)`. Resolves
@@ -265,12 +275,9 @@ clicking goes to `/projects/<id>` with `?v=tasks` when `tasks.visible(p)`. Resol
 
 ## build.sh
 
-```sh
-#!/bin/sh
-# Usage: ./build.sh [snippet files...] > dist/portal.js   (default: all snippets)
-```
-Concatenates `core/moxie-portal.js` then the given snippet files (default
-`snippets/*.js`) to stdout, separated by a blank line. No minification.
+Dropped on 2026-10-15, after the README was written, at Cathy's request: the audience is
+non-technical Moxie users who copy files from GitHub and paste them into the embed box,
+so a shell script added friction without value. Developers concatenate with `cat`.
 
 ## Testing
 
@@ -301,11 +308,12 @@ write snippets.
 2. Requirements: a Moxie workspace whose client portal settings include the JavaScript
    embed box.
 3. Install: Settings > Client Portal > Advanced > JavaScript embed code; paste the
-   parent first, then each wanted snippet; or run `build.sh` and paste the output.
+   parent first, then each wanted snippet, copied from GitHub; how to change or remove
+   a snippet later.
 4. Configure the parent: `CLIENT_FILTER` and `WAITING_STATUSES`, with examples.
 5. One section per snippet: what it shows, its constants.
 6. Writing your own snippet: the `portal` API reference and a ten-line example.
 7. How it works and caveats: uses undocumented portal internals (Vue 2 store, internal
    `/api/v1/.../portal/...` endpoints) that Moxie may change; test with
    "Preview as contact"; the portal's firewall rate limit.
-8. Development: `npm install`, `npm test`, `build.sh`.
+8. Development: `npm install`, `npm test`.

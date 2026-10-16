@@ -56,7 +56,8 @@ function fakeRouter(start) {
 
 // Boots core/moxie-portal.js inside jsdom with a fake Vue app on #app.
 // opts: html (inside #app), route, customValues, clientId, features, responses ({ '/projects': [...] }),
-//       filter (replaces CLIENT_FILTER; default { ClientType: 'TEST' }), attachLater (leave #app without __vue__).
+//       filter (replaces CLIENT_FILTER; default { ClientType: 'TEST' }), homeCards (replaces HOME_CARDS),
+//       attachLater (leave #app without __vue__).
 function boot(opts = {}) {
   const warns = [];
   const virtualConsole = new VirtualConsole();
@@ -83,6 +84,9 @@ function boot(opts = {}) {
   const filter = 'filter' in opts ? opts.filter : { ClientType: 'TEST' };
   let source = fs.readFileSync(CORE_PATH, 'utf8');
   source = source.replace(/var CLIENT_FILTER = [^;]*;/, 'var CLIENT_FILTER = ' + JSON.stringify(filter) + ';');
+  if ('homeCards' in opts) {
+    source = source.replace(/var HOME_CARDS = [\s\S]*?\];/, 'var HOME_CARDS = ' + JSON.stringify(opts.homeCards) + ';');
+  }
   window.eval(source);
   return { window, document: window.document, store, router, calls, warns, attach, MoxiePortal: window.MoxiePortal, source };
 }

@@ -22,6 +22,15 @@
   // Task status labels that mean the client has to do something.
   var WAITING_STATUSES = ['Wait on client', 'Ready for approval'];
 
+  // Home page cards, in display order. Each inner list is one row of cards shown side by
+  // side (they stack on narrow screens); a name on its own is a row by itself. Remove a
+  // name to drop that card. Pasted cards missing from this list are shown after it, one
+  // per row.
+  var HOME_CARDS = [
+    ['waiting', 'recent'],
+    ['requests', 'projects']
+  ];
+
   // ---------------------------------------------------------------------------
   // Shared look and feel
   // ---------------------------------------------------------------------------
@@ -53,13 +62,15 @@
     '.mp-card .mp-empty { margin: 0; padding: 16px; color: var(--portal-muted); font-size: 14px; }',
     '.mp-card .mp-footer { width: 100%; display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 12px 16px; border: 0; border-top: 1px solid var(--portal-border); background: transparent; color: var(--v-primary-base); font-size: 14px; font-weight: 500; text-align: left; cursor: pointer; }',
     '.mp-card .mp-footer:hover { background: var(--v-gray_10-base); }',
-    '#mp-top, #mp-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 320px), 1fr)); gap: 18px; margin-bottom: 28px; }',
-    '#mp-grid { align-items: start; }',
-    // Side-by-side cards share a height; lists grow so footers sit at the bottom.
-    '#mp-top > .mp-card { display: flex; flex-direction: column; }',
-    '#mp-top .mp-list, #mp-top .mp-empty { flex: 1; align-content: start; }',
+    '#mp-home { margin-bottom: 28px; }',
+    '#mp-home .mp-row { display: flex; flex-wrap: wrap; gap: 18px; margin-bottom: 18px; }',
+    '#mp-home .mp-row:last-child { margin-bottom: 0; }',
+    // Cards in a row share its height and split the width; lists grow so footers sit at the bottom.
+    '#mp-home .mp-row > .mp-card { flex: 1 1 320px; min-width: 0; display: flex; flex-direction: column; }',
+    '#mp-home .mp-list, #mp-home .mp-empty { flex: 1; align-content: start; }',
     '@media (max-width: 599px) {',
-    '  #mp-top, #mp-grid { gap: 14px; margin-bottom: 20px; }',
+    '  #mp-home { margin-bottom: 20px; }',
+    '  #mp-home .mp-row { gap: 14px; margin-bottom: 14px; }',
     '}',
     '[data-mp-hidden] { display: none !important; }'
   ].join('\n');
@@ -357,7 +368,7 @@
     };
 
     // --- home page cards -------------------------------------------------------
-    var mounts = [];   // { id, slot, replaces, render, node, seq }
+    var mounts = [];   // { name, replaces, render, node, seq }
 
     function onHomeRoute() { return router.currentRoute.path === '/welcome'; }
 
@@ -390,11 +401,30 @@
 
     function clearHome() {
       mounts.forEach(function (m) { m.seq++; unplace(m); });
-      ['mp-top', 'mp-grid'].forEach(function (id) {
-        var node = document.getElementById(id);
-        if (node) node.remove();
-      });
+      var block = document.getElementById('mp-home');
+      if (block) block.remove();
       setHidden([]);
+    }
+
+    // Rows of rendered cards: HOME_CARDS first, then any pasted card it does not name, one per row.
+    function homeRows() {
+      var byName = {};
+      mounts.forEach(function (m) { if (m.node) byName[m.name] = m; });
+      var rows = [];
+      var seen = {};
+      (HOME_CARDS || []).forEach(function (entry) {
+        var names = Array.isArray(entry) ? entry : [entry];
+        var row = [];
+        names.forEach(function (name) {
+          var m = byName[name];
+          if (m && !seen[name]) { seen[name] = true; row.push(m); }
+        });
+        if (row.length) rows.push(row);
+      });
+      mounts.forEach(function (m) {
+        if (m.node && !seen[m.name]) { seen[m.name] = true; rows.push([m]); }
+      });
+      return rows;
     }
 
     // Puts rendered cards where they belong. Cheap and idempotent; runs after every DOM change.
@@ -404,50 +434,32 @@
       if (!root) return;
       var anchor = root.querySelector(':scope > .action-dashboard, :scope > .dashboard-loading, :scope > .dashboard-state, :scope > .upcoming-dashboard');
       var dashboard = root.querySelector(':scope > .action-dashboard');
-      var hidden = [];
 
-      var topCards = mounts.filter(function (m) { return m.slot === 'top' && m.node; });
-      var top = document.getElementById('mp-top');
-      if (!topCards.length) {
-        if (top) top.remove();
-        top = null;
+      var rows = homeRows();
+      var block = document.getElementById('mp-home');
+      if (!rows.length) {
+        if (block) block.remove();
       } else {
-        if (!top) { top = el('div'); top.id = 'mp-top'; }
-        if (top.parentElement !== root) root.insertBefore(top, anchor);
-        topCards.forEach(function (m, i) {
-          if (top.children[i] !== m.node) top.insertBefore(m.node, top.children[i] || null);
+        if (!block) { block = el('div'); block.id = 'mp-home'; }
+        var misplaced = anchor ? block.nextElementSibling !== anchor : block.parentElement !== root;
+        if (misplaced) root.insertBefore(block, anchor);
+        rows.forEach(function (row, i) {
+          var rowNode = block.children[i];
+          if (!rowNode) { rowNode = el('div', 'mp-row'); block.appendChild(rowNode); }
+          row.forEach(function (m, j) {
+            if (rowNode.children[j] !== m.node) rowNode.insertBefore(m.node, rowNode.children[j] || null);
+          });
+          while (rowNode.children.length > row.length) rowNode.lastElementChild.remove();
         });
+        while (block.children.length > rows.length) block.lastElementChild.remove();
       }
 
-      var mainCards = mounts.filter(function (m) { return m.slot === 'main' && m.node; });
-      var grid = document.getElementById('mp-grid');
-      if (dashboard || !mainCards.length) {
-        if (grid) grid.remove();
-        grid = null;
-      }
+      // Hide the built-in cards that our cards replace.
+      var hidden = [];
       if (dashboard) {
-        var prev = null;
-        mainCards.forEach(function (m) {
-          var builtIn = m.replaces ? builtInCard(dashboard, m.replaces) : null;
-          if (builtIn) {
-            hidden.push(builtIn);
-            if (builtIn.nextElementSibling !== m.node) builtIn.after(m.node);
-          } else if (prev) {
-            if (prev.nextElementSibling !== m.node) prev.after(m.node);
-          } else if (dashboard.firstElementChild !== m.node) {
-            dashboard.prepend(m.node);
-          }
-          prev = m.node;
-        });
-      } else if (mainCards.length) {
-        if (!grid) { grid = el('div'); grid.id = 'mp-grid'; }
-        if (top) {
-          if (top.nextElementSibling !== grid) top.after(grid);
-        } else if (grid.parentElement !== root) {
-          root.insertBefore(grid, anchor);
-        }
-        mainCards.forEach(function (m, i) {
-          if (grid.children[i] !== m.node) grid.insertBefore(m.node, grid.children[i] || null);
+        mounts.forEach(function (m) {
+          var builtIn = m.node && m.replaces ? builtInCard(dashboard, m.replaces) : null;
+          if (builtIn) hidden.push(builtIn);
         });
       }
       setHidden(hidden);
@@ -459,7 +471,7 @@
       Promise.resolve().then(function () { return m.render(); }).then(function (node) {
         if (seq !== m.seq) return;
         if (!node) { unplace(m); place(); return; }
-        node.id = m.id;
+        node.id = 'mp-' + m.name;
         node.classList.add('mp-card');
         var old = m.node;
         m.node = node;
@@ -468,7 +480,7 @@
       }).then(null, function (err) {
         // Catches render rejections and anything the swap above threw (e.g. a non-element).
         if (seq !== m.seq) return;
-        warn('card ' + m.id + ' failed', err);
+        warn('card mp-' + m.name + ' failed', err);
         unplace(m);
         place();
       });
@@ -480,16 +492,16 @@
     var home = {
       mount: function (spec) {
         if (!active) return;
+        if (!spec || !spec.name) { warn('home.mount needs a name', spec); return; }
         var m = {
-          id: spec.id,
-          slot: spec.slot === 'top' ? 'top' : 'main',
+          name: String(spec.name),
           replaces: spec.replaces || null,
           render: spec.render,
           node: null,
           seq: 0
         };
         mounts.push(m);
-        if (active && onHomeRoute()) renderCard(m);
+        if (onHomeRoute()) renderCard(m);
       },
       refresh: refreshHome
     };

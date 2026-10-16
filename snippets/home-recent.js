@@ -51,8 +51,7 @@
     }
 
     portal.home.mount({
-      id: 'mp-recent',
-      slot: 'top',
+      name: 'recent',
       render: function () {
         if (!portal.features().projectsEnabled) return false;
         return portal.data.tasks().then(function (items) {

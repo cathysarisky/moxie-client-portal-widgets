@@ -15,8 +15,7 @@
     }
 
     portal.home.mount({
-      id: 'mp-requests',
-      slot: 'main',
+      name: 'requests',
       replaces: 'Tickets',
       render: function () {
         if (!portal.features().ticketsEnabled) return false;

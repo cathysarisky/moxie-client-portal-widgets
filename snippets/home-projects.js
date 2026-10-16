@@ -7,8 +7,7 @@
 
   MoxiePortal.ready(function (portal) {
     portal.home.mount({
-      id: 'mp-projects',
-      slot: 'main',
+      name: 'projects',
       replaces: 'Deliverables',
       render: function () {
         if (!portal.features().projectsEnabled) return false;

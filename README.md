@@ -1,10 +1,10 @@
 # Moxie portal snippets
 
-Drop-in customisations for the [Moxie](https://www.withmoxie.com) client portal. One parent script does the plumbing; small snippets add the widgets and restyling you want on top. Everything is plain JavaScript pasted into Moxie's portal settings. There is no build step and nothing to host.
+Drop-in customisations for the [Moxie](https://www.withmoxie.com) client portal. One parent script does the plumbing; small snippets add the widgets and restyling you want on top. Everything is plain JavaScript pasted into Moxie's portal settings. There is nothing to install, no build step and nothing to host.
 
 | Snippet | What it does |
 |---|---|
-| `sidebar-restyle` | Recolours the left menu and optionally hides the workspace logo. |
+| `sidebar-restyle` | Recolours the left menu and hides or replaces the workspace logo. |
 | `nav-tasks-link` | Adds a **Tasks** menu item that opens the client's task board. |
 | `home-waiting` | Home card listing the tasks that are waiting on the client. |
 | `home-recent` | Home card showing the latest comment or change on each task. |
@@ -16,24 +16,40 @@ Drop-in customisations for the [Moxie](https://www.withmoxie.com) client portal.
 - A Moxie workspace whose client portal settings include the **JavaScript embed code** box (Settings > Client Portal > Advanced).
 - A way to look at the portal as a client: sign in as a portal contact, or use **Preview as contact** on a client's Portal access tab.
 
+## How it works
+
+The portal is a Vue 2 application. The parent reads its store and router through `#app.__vue__` and fetches data from the same internal endpoints the portal itself uses, under `/api/v1/{account}/portal/{client}/`, with the session's own token. In other words, we get the data your user has permissions to get anyway, and just display
+it in a way that better suits our own businesses.
+
+## Caution 
+
+**None of this is a documented Moxie API**, so a portal update can rename an element, a component or an endpoint and break a snippet. The whole thing might just stop working. Don't use this approach for any changes that are mission-critical absolutely must run or else the clients are going to see something secret, because the day might come when it just ... doesn't.
+
+Load the portal sparingly while testing. Moxie's sign-in service blocks an address that loads the portal roughly fifteen times in five minutes, for a couple of minutes, and that includes your own browser.
+
 ## Install
 
-1. Open `core/moxie-portal.js` and edit the two settings at the top (see [Parent settings](#parent-settings)).
-2. In Moxie, go to **Settings > Client Portal > Advanced > JavaScript embed code**.
-3. Paste the whole parent script.
-4. Below it, paste each snippet you want from `snippets/`. Order among snippets does not matter, but the parent must come first.
-5. Save, then open the portal as a client to check.
+Everything happens in your browser: copy a file from this repository, paste it into Moxie.
 
-To paste one file instead of several, build it:
+1. In Moxie, open **Settings > Client Portal > Advanced** and find the **JavaScript embed code** box. Keep that tab open.
+2. Open [core/moxie-portal.js](core/moxie-portal.js) on GitHub and click the **Copy raw file** button above the code (the two-squares icon), or select all of the text and copy it.
+3. Paste it into the box. This is the parent script, and it must be the first thing in the box.
+4. In the pasted text, find the settings near the top: `var CLIENT_FILTER`, `var WAITING_STATUSES` and `var HOME_CARDS`. Change them for your workspace; [Parent settings](#parent-settings) explains each. If you are not sure yet, change `CLIENT_FILTER` to `null` so every client sees the widgets.
+5. For each widget you want, open its file in the [snippets](snippets/) folder, copy it the same way, click at the very end of the box and paste it there. Snippets can go in any order, as long as every one of them is below the parent.
+6. Save.
+7. Look at the portal as a client: sign in as a portal contact, or use **Preview as contact** on a client's Portal access tab. Reload only a few times in a row; see [what could break](#how-it-works-and-what-could-break).
 
-```sh
-./build.sh > dist/portal.js                                                  # parent + every snippet
-./build.sh snippets/sidebar-restyle.js snippets/home-requests.js > dist/portal.js
-```
+If nothing shows up, the usual reason is `CLIENT_FILTER`: the client you are looking at does not match it.
+
+### Changing or removing a snippet later
+
+Each snippet's settings are the lines starting with `var` just under its banner comment, the one that reads `/* MoxiePortal snippet: ... */`. Edit them in the Moxie box and save.
+
+To remove a snippet, delete its block: from its banner comment down to the line before the next banner, or to the end of the box. To update a snippet, delete the old block and paste the new file in its place.
 
 ## Parent settings
 
-Both live at the top of `core/moxie-portal.js`.
+All three are near the top of the parent script, whether you edit it in the Moxie box or in the file.
 
 **`CLIENT_FILTER`** decides which clients see the snippets. It maps client custom-field *mapping keys* to required values. A client passes when every entry matches; case and surrounding spaces are ignored.
 
@@ -51,23 +67,40 @@ The mapping key is the field's identifier in Moxie's client custom-field setting
 var WAITING_STATUSES = ['Wait on client', 'Ready for approval'];
 ```
 
+**`HOME_CARDS`** arranges the Home cards. Each inner list is one row; the cards in it sit side by side and share the row's width (on a phone they stack). A name on its own, outside any inner list, gets a row to itself. Order in the list is order on the page.
+
+```js
+var HOME_CARDS = [
+  ['waiting', 'recent'],      // first row: two cards side by side
+  ['requests', 'projects']    // second row
+];
+
+var HOME_CARDS = ['waiting', ['requests', 'projects']];   // Waiting full width, then a pair
+
+var HOME_CARDS = [['requests']];                          // only Requests, even if other snippets are pasted
+```
+
+The names are `waiting`, `recent`, `requests` and `projects`. Remove a name and that card is not shown even if its snippet is pasted. A pasted card whose name is missing from the list is still shown, after the listed ones, in a row of its own, so forgetting to update the list never hides anything by accident.
+
 ## Snippets
 
 Each snippet has its editable text and settings at the top of its file.
 
 ### sidebar-restyle
 
-Recolours the left menu, and the brand area above it on wider screens, and optionally hides the logo.
+Recolours the left menu, and the brand area above it on wider screens, and hides the workspace logo or shows your own image in its place.
 
 | Setting | Default | Meaning |
 |---|---|---|
 | `SIDEBAR_COLOR` | `'#1B5E20'` | Menu background |
 | `ACTIVE_STRIPE` | `'#A5D6A7'` | Marker beside the selected menu item |
-| `HIDE_LOGO` | `true` | Hide the workspace logo above the menu |
+| `LOGO_CHANGE` | `'none'` | `'none'` hides the logo; a URL such as `'https://example.com/logo.png'` shows that image instead; `''` leaves the workspace logo alone |
+| `LOGO_WIDTH` | `''` | Logo width, e.g. `160` (pixels) or `'80%'`; `''` keeps the portal's sizing |
+| `LOGO_HEIGHT` | `''` | Logo height, e.g. `48` (pixels); `''` keeps the portal's sizing. Sizes apply to a replacement logo or to the original one, and the image keeps its proportions when only one side is given |
 
 ### nav-tasks-link
 
-Adds a **Tasks** item right after **Projects** in the left menu. It opens the task board of the client's first active project, follows the menu's collapsed mode, and is highlighted while the board is showing, with the Projects item un-highlighted at the same time. Nothing is added when the client has no active project.
+Adds a **Tasks** item right after **Projects** in the left menu. It opens the task board of the client's first active project, follows the menu's collapsed mode, and is highlighted while the board is showing, with the Projects item un-highlighted at the same time. Nothing is added when the client has no active project.  If you use multiple projects with each client, this is probably not for you!
 
 | Setting | Default | Meaning |
 |---|---|---|
@@ -75,7 +108,7 @@ Adds a **Tasks** item right after **Projects** in the left menu. It opens the ta
 
 ### home-waiting
 
-Top row of Home. Lists tasks whose status is in `WAITING_STATUSES`, soonest due first, each with its status colour, project and due date. Clicking a task opens the task side panel, and the cards refresh when it closes. A footer links to each project's task board. Hidden when projects are turned off for the client.
+Lists tasks whose status is in `WAITING_STATUSES`, soonest due first, each with its status colour, project and due date. Clicking a task opens the task side panel, and the cards refresh when it closes. A footer links to each project's task board. Hidden when projects are turned off for the client.
 
 | Setting | Default |
 |---|---|
@@ -85,7 +118,7 @@ Top row of Home. Lists tasks whose status is in `WAITING_STATUSES`, soonest due 
 
 ### home-recent
 
-Top row of Home, beside Waiting on you. For each task, the newest public comment or change made by someone other than the viewer within the last `DAYS` days, newest first. Clicking opens the task side panel.
+For each task, the newest public comment or change made by someone other than the viewer within the last `DAYS` days, newest first. Clicking opens the task side panel.
 
 | Setting | Default |
 |---|---|
@@ -96,7 +129,7 @@ Top row of Home, beside Waiting on you. For each task, the newest public comment
 
 ### home-requests
 
-Replaces Moxie's own Requests card, which lists only tickets the viewer filed, is assigned to or is copied on, with every open ticket for the client, most recently updated first. Each row shows the ticket number, its status with the status colour, "New reply" when there is an unread reply, and when it was last updated. The arrow in the header opens the Requests page. Hidden when tickets are turned off for the client.
+Every open ticket for the client, most recently updated first, and hides Moxie's own Requests card, which lists only tickets the viewer filed, is assigned to or is copied on. Each row shows the ticket number, its status with the status colour, "New reply" when there is an unread reply, and when it was last updated. The arrow in the header opens the Requests page. Hidden when tickets are turned off for the client.
 
 | Setting | Default |
 |---|---|
@@ -106,14 +139,20 @@ Replaces Moxie's own Requests card, which lists only tickets the viewer filed, i
 
 ### home-projects
 
-Replaces Moxie's own "Projects" card, which actually lists tasks awaiting approval, with the client's active projects in alphabetical order. Each row shows the lifecycle when it is not Active, the due date, and how many tasks are waiting on the client. Clicking opens the project, on its task board when the client can see tasks. Hidden when the client has no active project.
+The client's active projects in alphabetical order, hiding Moxie's own "Projects" card, which actually lists tasks awaiting approval. Each row shows the lifecycle when it is not Active, the due date, and how many tasks are waiting on the client. Clicking opens the project, on its task board when the client can see tasks. Hidden when the client has no active project.
 
 | Setting | Default |
 |---|---|
 | `TITLE` | `'Projects'` |
 | `MAX_ROWS` | `5` |
 
-**How Home cards are placed.** Top-row cards sit side by side above Moxie's own dashboard. Main cards take the place of the built-in card they name when that card is showing; otherwise they form a row of their own. A card appears only once its data has loaded, so nothing shows half-filled, and the cards are rendered again each time the viewer arrives on Home.
+**How Home cards are placed.** The cards form a block above Moxie's own dashboard, in the rows set by `HOME_CARDS`. Moxie's dashboard stays below with whatever else it holds, minus the built-in cards that Requests and Projects stand in for. A card appears only once its data has loaded, so nothing shows half-filled, and the cards are rendered again each time the viewer arrives on Home.
+
+## Buy me a tea?
+Thank for trying out these client portal widgets.  Feedback welcome!  
+[Want more cards?](https://www.spectralwebservices.com/tipjar/)
+
+# More technical bits (it's ok to stop reading now)
 
 ## Writing your own snippet
 
@@ -125,8 +164,7 @@ A snippet is a self-contained function registered with `MoxiePortal.ready`. It r
 
   MoxiePortal.ready(function (portal) {
     portal.home.mount({
-      id: 'mp-hello',
-      slot: 'top',
+      name: 'hello',
       render: function () {
         var card = portal.card({ title: GREETING, icon: portal.icons.folder });
         card.appendChild(portal.empty('Signed in as ' + (portal.user().email || 'you')));
@@ -203,25 +241,18 @@ The bundled files stick to ES5 (`var`, `function`) so they paste anywhere withou
 
 | Member | Meaning |
 |---|---|
-| `portal.home.mount({ id, slot, replaces, render })` | `slot` is `'top'` or `'main'`. `replaces` (main only) names the built-in card to replace: `'Tickets'` or `'Deliverables'`. `render()` returns an element, a Promise of one, or `false` to hide the card |
+| `portal.home.mount({ name, replaces, render })` | `name` is how `HOME_CARDS` refers to the card; the element gets the id `mp-<name>`. `replaces` optionally names a built-in Moxie card to hide while yours shows: `'Tickets'` or `'Deliverables'`. `render()` returns an element, a Promise of one, or `false` to hide the card. A card not named in `HOME_CARDS` is shown after the listed ones in a row of its own |
 | `portal.home.refresh()` | Re-fetch data and render every mounted card again |
-
-## How it works, and what could break
-
-The portal is a Vue 2 application. The parent reads its store and router through `#app.__vue__` and fetches data from the same internal endpoints the portal itself uses, under `/api/v1/{account}/portal/{client}/`, with the session's own token. None of this is a documented Moxie API, so a portal update can rename an element, a component or an endpoint and break a snippet. Failures are quiet: the snippet logs a warning in the browser console and the others keep working.
-
-Load the portal sparingly while testing. Moxie's sign-in service blocks an address that loads the portal roughly fifteen times in five minutes, for a couple of minutes, and that includes your own browser.
 
 ## Development
 
 ```sh
 npm install
 npm test        # syntax-checks every file, then runs the parent's jsdom tests
-./build.sh      # prints parent + snippets to stdout
 ```
 
-Tests cover the parent script. Snippets are checked by hand in the portal.
+Tests cover the parent script. Snippets are checked by hand in the portal. To assemble everything into one file for your own pasting, concatenate in the right order: `cat core/moxie-portal.js snippets/*.js > portal.js`.
 
 ## License
 
-MIT. Copyright (c) 2026 Cathy Sarisky, [Spectral Web Services](https://spectralwebservices.com).
+MIT. Copyright (c) 2026 Cathy Sarisky, [Spectral Web Services](https://www.spectralwebservices.com).

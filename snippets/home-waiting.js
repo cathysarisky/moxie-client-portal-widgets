@@ -8,8 +8,7 @@
 
   MoxiePortal.ready(function (portal) {
     portal.home.mount({
-      id: 'mp-waiting',
-      slot: 'top',
+      name: 'waiting',
       render: function () {
         if (!portal.features().projectsEnabled) return false;
         return Promise.all([portal.data.waitingTasks(), portal.data.projects()]).then(function (res) {
