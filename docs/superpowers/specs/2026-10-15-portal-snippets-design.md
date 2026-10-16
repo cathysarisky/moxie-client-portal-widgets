@@ -43,7 +43,8 @@ text to that box; the parent goes first, snippets follow in any order.
 
 ```
 core/moxie-portal.js          the parent; defines window.MoxiePortal
-snippets/sidebar-restyle.js   green sidebar, hidden logo (was portal-custom.js)
+snippets/logo.js              hide or replace the workspace logo (was part of portal-custom.js)
+snippets/custom-css.js        client-specific CSS rules (was part of portal-custom.js)
 snippets/nav-tasks-link.js    Tasks menu item (was portal-tasks-link.js)
 snippets/home-waiting.js      "Waiting on you" card
 snippets/home-recent.js       "Recently updated" card
@@ -65,10 +66,16 @@ Naming: the global is `MoxiePortal`. CSS classes and element ids use the prefix
 ### Configuration (top of file)
 
 ```js
-var CLIENT_FILTER = { ClientType: 'TEST' }; // null = every client
+var CLIENT_FILTER = null; // e.g. { ClientType: 'TEST' }; null = every client
 var WAITING_STATUSES = ['Wait on client', 'Ready for approval'];
 var HOME_CARDS = [['waiting', 'recent'], ['requests', 'projects']];
 ```
+
+`CLIENT_FILTER` defaults to `null` since 2026-10-15 (was `{ ClientType: 'TEST' }`): the
+audience is other Moxie users, and each snippet now carries its own `ONLY_FOR` filter
+(passed as `MoxiePortal.ready(fn, { onlyFor })`) that applies on top of the global one.
+A snippet runs only when the client passes both. Pasting a snippet twice with different
+`ONLY_FOR` values gives different clients different settings.
 
 `HOME_CARDS` (added 2026-10-15 at Cathy's request, replacing fixed slots) arranges Home
 cards by name. Each inner array is one row; a bare string is a row of one. Cards named
@@ -94,11 +101,12 @@ has to act"; it lives here because two cards use it.
 
 ### Activation lifecycle
 
-A snippet registers with `MoxiePortal.ready(fn)`. The parent keeps the list.
+A snippet registers with `MoxiePortal.ready(fn, options)`; `options.onlyFor` is an
+optional client filter in the `CLIENT_FILTER` shape. The parent keeps the list.
 
 - **Activate** happens when the app is found and the current client passes
   `CLIENT_FILTER`, and again after every client change that passes. For each registered
-  `fn`, the parent calls `fn(portal)` inside try/catch (a failing snippet logs
+  snippet whose `onlyFor` the client also matches, the parent calls `fn(portal)` inside try/catch (a failing snippet logs
   `console.warn('[MoxiePortal] snippet failed', err)` and does not stop the others).
   If `fn` returns a function it is stored as that snippet's cleanup.
 - **Deactivate** happens on every client change and when the client stops passing the
@@ -227,17 +235,20 @@ Every snippet is an IIFE with its editable constants at the top, then
 `MoxiePortal.ready(function (portal) { ... })`. Behaviour is identical to today unless
 noted.
 
-**sidebar-restyle.js** (constants `SIDEBAR_COLOR`, `ACTIVE_STRIPE`, `LOGO_CHANGE`, `LOGO_WIDTH`, `LOGO_HEIGHT`)
-Calls `portal.style` with the sidebar background, active-stripe colour, and the
-`.brand-zone` background at `min-width: 600px`. Because activation already implies the
-client matches, no html attribute gate is needed.
-Change: `LOGO_CHANGE` replaces the old always-hide behaviour. `'none'` hides
-`img.brand-logo` via CSS; a URL swaps the image's `src` and re-asserts it from `onDom`
-when the portal re-renders the sidebar, restoring the original on cleanup; `''` leaves
-the logo alone. (Cathy, 2026-10-15; an earlier draft used a boolean `HIDE_LOGO`.)
-`LOGO_WIDTH` / `LOGO_HEIGHT` (optional, bare numbers mean px) size the logo, replacement
-or original, with `max-width: 100%` so it stays inside the sidebar and `auto` on the
-other side so proportions hold when only one is given.
+**logo.js** (constants `LOGO_CHANGE`, `LOGO_WIDTH`, `LOGO_HEIGHT`, `ONLY_FOR`)
+`'none'` hides `img.brand-logo` via CSS; a URL swaps the image's `src` and re-asserts it
+from `onDom` when the portal re-renders the sidebar, restoring the original on cleanup;
+`''` leaves the logo alone. `LOGO_WIDTH` / `LOGO_HEIGHT` (optional, bare numbers mean px)
+size the logo, replacement or original, with `max-width: 100%` so it stays inside the
+sidebar and `auto` on the other side so proportions hold when only one is given.
+
+**custom-css.js** (constants `CSS`, `ONLY_FOR`)
+`CSS` is an array of rule strings joined with newlines and passed to `portal.style`. Ships
+with Cathy's green-sidebar rules as the example. With `ONLY_FOR` this is the general
+"different look for some clients" tool.
+
+(Both replace the earlier `sidebar-restyle.js`, split on 2026-10-15 at Cathy's request.
+Every snippet, including the Home cards and nav link, has an `ONLY_FOR` constant.)
 
 **nav-tasks-link.js** (constants `TASKS_LABEL`)
 On activation loads `data.projects()`, picks the first `active` project, and keeps a

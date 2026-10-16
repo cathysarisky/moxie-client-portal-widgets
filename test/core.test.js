@@ -539,3 +539,41 @@ test('registrations made after the client stopped matching are dropped', async (
   assert.equal(t.document.getElementById('mp-late'), null);
   assert.equal(t.warns.length, 0);
 });
+
+test('a snippet with onlyFor runs only for clients matching it, on top of CLIENT_FILTER', () => {
+  const t = boot({ filter: null, customValues: [{ mappingKey: 'ClientType', value: 'TNC' }] });
+  const log = [];
+  t.MoxiePortal.ready(() => { log.push('tnc'); }, { onlyFor: { ClientType: 'TNC' } });
+  t.MoxiePortal.ready(() => { log.push('retainer'); }, { onlyFor: { ClientType: 'Retainer' } });
+  t.MoxiePortal.ready(() => { log.push('everyone'); });
+  assert.deepEqual(log, ['tnc', 'everyone']);
+  t.store.state.clientPortalContext.client.customValues = [{ mappingKey: 'ClientType', value: 'retainer' }];
+  t.store.notify();
+  assert.deepEqual(log, ['tnc', 'everyone', 'retainer', 'everyone']);
+});
+
+test('CLIENT_FILTER still gates a snippet whose own onlyFor matches', () => {
+  const t = boot({ filter: { Tier: 'A' }, customValues: [{ mappingKey: 'ClientType', value: 'TNC' }] });
+  let runs = 0;
+  let blocked = 0;
+  t.MoxiePortal.ready(() => { runs++; }, { onlyFor: { ClientType: 'TNC' } });
+  t.MoxiePortal.ready(() => { blocked++; }, { onlyFor: { ClientType: 'Retainer' } });
+  assert.equal(runs, 0);
+  t.store.state.clientPortalContext.client.customValues = [{ mappingKey: 'ClientType', value: 'TNC' }, { mappingKey: 'Tier', value: 'A' }];
+  t.store.notify();
+  assert.equal(runs, 1);
+  assert.equal(blocked, 0, 'the snippet whose own filter does not match stays off');
+});
+
+test('a snippet whose onlyFor stops matching is cleaned up while the others keep running', () => {
+  const t = boot({ filter: null, customValues: [{ mappingKey: 'ClientType', value: 'TNC' }] });
+  const log = [];
+  t.MoxiePortal.ready((portal) => { portal.style('.tnc {}'); return () => log.push('tnc cleanup'); }, { onlyFor: { ClientType: 'TNC' } });
+  t.MoxiePortal.ready(() => { log.push('everyone'); });
+  const tncStyles = () => [...t.document.head.querySelectorAll('style')].filter((s) => s.textContent.includes('.tnc')).length;
+  assert.equal(tncStyles(), 1);
+  t.store.state.clientPortalContext.client.customValues = [{ mappingKey: 'ClientType', value: 'Other' }];
+  t.store.notify();
+  assert.equal(tncStyles(), 0);
+  assert.deepEqual(log, ['everyone', 'tnc cleanup', 'everyone']);
+});

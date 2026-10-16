@@ -6,6 +6,9 @@
   var DAYS = 14;
   var EMPTY = 'No updates in the last ' + DAYS + ' days.';
   var MAX_ROWS = 5;
+  // Run only for clients whose custom fields match, e.g. { ClientType: 'TNC' }.
+  // null means every client the parent script allows.
+  var ONLY_FOR = null;
 
   MoxiePortal.ready(function (portal) {
     // Let the longer "who did what" line wrap to two lines.
@@ -79,5 +82,5 @@
         });
       }
     });
-  });
+  }, { onlyFor: ONLY_FOR });
 })();

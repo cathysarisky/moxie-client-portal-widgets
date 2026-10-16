@@ -1,23 +1,20 @@
-/* MoxiePortal snippet: sidebar restyle.
- * Recolours the left menu and hides or replaces the workspace logo above it.
+/* MoxiePortal snippet: logo.
+ * Hides the workspace logo above the left menu, or shows a different image in its place.
  * Paste below the MoxiePortal parent script. */
 (function () {
-  var SIDEBAR_COLOR = '#1B5E20';   // left menu background
-  var ACTIVE_STRIPE = '#A5D6A7';   // marker beside the selected menu item
-  // Logo above the menu: 'none' hides it, a URL such as 'https://example.com/logo.png'
-  // shows that image instead, and '' leaves the workspace logo alone.
+  // 'none' hides the logo, a URL such as 'https://example.com/logo.png' shows that image
+  // instead, and '' leaves the workspace logo alone (useful with only a size change).
   var LOGO_CHANGE = 'none';
   // Optional logo size, applied to the replacement or to the original logo. A plain
   // number means pixels; '80%' and other CSS sizes work too. '' keeps the portal's sizing.
   var LOGO_WIDTH = '';
   var LOGO_HEIGHT = '';
+  // Run only for clients whose custom fields match, e.g. { ClientType: 'TNC' }.
+  // null means every client the parent script allows.
+  var ONLY_FOR = null;
 
   MoxiePortal.ready(function (portal) {
-    var css = [
-      '#left-nav { background-color: ' + SIDEBAR_COLOR + ' !important; }',
-      '#left-nav .portal-nav-link.is-active::before { border-left-color: ' + ACTIVE_STRIPE + ' !important; }',
-      '@media (min-width: 600px) { .brand-zone { background: ' + SIDEBAR_COLOR + ' !important; } }'
-    ];
+    var css = [];
     if (LOGO_CHANGE === 'none') css.push('.brand-logo { display: none !important; }');
 
     // Sizing: stay inside the sidebar, and keep the image's proportions when only one side is given.
@@ -31,7 +28,7 @@
       else rules.push(width ? 'height: auto !important' : 'width: auto !important');
       css.push('.brand-logo { ' + rules.join('; ') + '; }');
     }
-    portal.style(css.join('\n'));
+    if (css.length) portal.style(css.join('\n'));
 
     if (!LOGO_CHANGE || LOGO_CHANGE === 'none') return;
 
@@ -50,5 +47,5 @@
       var logo = document.querySelector('img.brand-logo');
       if (logo && originalSrc) logo.setAttribute('src', originalSrc);
     };
-  });
+  }, { onlyFor: ONLY_FOR });
 })();

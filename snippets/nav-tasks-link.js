@@ -3,6 +3,9 @@
  * client's first active project. Paste below the MoxiePortal parent script. */
 (function () {
   var TASKS_LABEL = 'Tasks';
+  // Run only for clients whose custom fields match, e.g. { ClientType: 'TNC' }.
+  // null means every client the parent script allows.
+  var ONLY_FOR = null;
 
   MoxiePortal.ready(function (portal) {
     var projectId = null;
@@ -90,5 +93,5 @@
       live = false;
       remove();
     };
-  });
+  }, { onlyFor: ONLY_FOR });
 })();

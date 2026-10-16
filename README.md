@@ -4,12 +4,17 @@ Drop-in customisations for the [Moxie](https://www.withmoxie.com) client portal.
 
 | Snippet | What it does |
 |---|---|
-| `sidebar-restyle` | Recolours the left menu and hides or replaces the workspace logo. |
-| `nav-tasks-link` | Adds a **Tasks** menu item that opens the client's task board. |
+| `logo` | Hides the workspace logo above the menu, or shows a different image in its place. |
+| `custom-css` | Adds your own style rules, for every client or only for the clients you name. |
+| `nav-tasks-link` | Adds a **Tasks** menu item that opens the client's task board for their first project. |
 | `home-waiting` | Home card listing the tasks that are waiting on the client. |
 | `home-recent` | Home card showing the latest comment or change on each task. |
 | `home-requests` | Replaces the Home Requests card with every open ticket for the client. |
 | `home-projects` | Replaces the Home "Projects" card with the client's actual projects. |
+
+![The Waiting on you card in a live portal, retitled "Needs your attention", listing four tasks with their status, project and a link to each project's task board](docs/screenshots/waiting-on-you.jpg)
+
+The Waiting on you card in a live portal. Its title was changed to "Needs your attention" by editing one line of the snippet.
 
 ## Requirements
 
@@ -34,7 +39,7 @@ Everything happens in your browser: copy a file from this repository, paste it i
 1. In Moxie, open **Settings > Client Portal > Advanced** and find the **JavaScript embed code** box. Keep that tab open.
 2. Open [core/moxie-portal.js](core/moxie-portal.js) on GitHub and click the **Copy raw file** button above the code (the two-squares icon), or select all of the text and copy it.
 3. Paste it into the box. This is the parent script, and it must be the first thing in the box.
-4. In the pasted text, find the settings near the top: `var CLIENT_FILTER`, `var WAITING_STATUSES` and `var HOME_CARDS`. Change them for your workspace; [Parent settings](#parent-settings) explains each. If you are not sure yet, change `CLIENT_FILTER` to `null` so every client sees the widgets.
+4. In the pasted text, find the settings near the top: `var CLIENT_FILTER`, `var WAITING_STATUSES` and `var HOME_CARDS`. Change them for your workspace; [Parent settings](#parent-settings) explains each. The defaults run for every client and show all four Home cards.
 5. For each widget you want, open its file in the [snippets](snippets/) folder, copy it the same way, click at the very end of the box and paste it there. Snippets can go in any order, as long as every one of them is below the parent.
 6. Save.
 7. Look at the portal as a client: sign in as a portal contact, or use **Preview as contact** on a client's Portal access tab. Reload only a few times in a row; see [what could break](#how-it-works-and-what-could-break).
@@ -51,7 +56,7 @@ To remove a snippet, delete its block: from its banner comment down to the line 
 
 All three are near the top of the parent script, whether you edit it in the Moxie box or in the file.
 
-**`CLIENT_FILTER`** decides which clients see the snippets. It maps client custom-field *mapping keys* to required values. A client passes when every entry matches; case and surrounding spaces are ignored.
+**`CLIENT_FILTER`** decides which clients see any of the snippets. It maps client custom-field *mapping keys* to required values. A client passes when every entry matches; case and surrounding spaces are ignored. Each snippet can narrow this further with its own `ONLY_FOR` setting, described under [Snippets](#snippets).
 
 ```js
 var CLIENT_FILTER = null;                                   // every client
@@ -84,19 +89,41 @@ The names are `waiting`, `recent`, `requests` and `projects`. Remove a name and 
 
 ## Snippets
 
-Each snippet has its editable text and settings at the top of its file.
-
-### sidebar-restyle
-
-Recolours the left menu, and the brand area above it on wider screens, and hides the workspace logo or shows your own image in its place.
+Each snippet has its editable text and settings at the top of its file. Every one of them also has:
 
 | Setting | Default | Meaning |
 |---|---|---|
-| `SIDEBAR_COLOR` | `'#1B5E20'` | Menu background |
-| `ACTIVE_STRIPE` | `'#A5D6A7'` | Marker beside the selected menu item |
+| `ONLY_FOR` | `null` | Run this snippet only for clients whose custom fields match, e.g. `{ ClientType: 'TNC' }`. It works like `CLIENT_FILTER` and applies on top of it. `null` means every client the parent allows |
+
+**Different looks for different clients.** Paste a snippet twice with different settings and different `ONLY_FOR` values, for example one `custom-css` block with a green menu for `{ ClientType: 'TNC' }` and another with a blue menu for `{ ClientType: 'Agency' }`. Only the copy whose filter matches the signed-in client runs. This works for every snippet, including the Home cards, as long as the two filters do not overlap.
+
+### logo
+
+Hides the workspace logo above the left menu, or shows a different image in its place, with optional sizing.
+
+| Setting | Default | Meaning |
+|---|---|---|
 | `LOGO_CHANGE` | `'none'` | `'none'` hides the logo; a URL such as `'https://example.com/logo.png'` shows that image instead; `''` leaves the workspace logo alone |
 | `LOGO_WIDTH` | `''` | Logo width, e.g. `160` (pixels) or `'80%'`; `''` keeps the portal's sizing |
 | `LOGO_HEIGHT` | `''` | Logo height, e.g. `48` (pixels); `''` keeps the portal's sizing. Sizes apply to a replacement logo or to the original one, and the image keeps its proportions when only one side is given |
+
+### custom-css
+
+Adds your own style rules to the portal. Because of `ONLY_FOR`, this is how you give one group of clients a different look: a menu colour, a hidden element, a different font.
+
+| Setting | Default | Meaning |
+|---|---|---|
+| `CSS` | three lines that colour the left menu green | One rule per line. Each line sits inside single quotes and ends with a comma, so use double quotes inside a rule, as in `url("https://...")` |
+
+The default lines recolour the left menu and the brand area above it on wider screens:
+
+```js
+var CSS = [
+  '#left-nav { background-color: #1B5E20 !important; }',
+  '#left-nav .portal-nav-link.is-active::before { border-left-color: #A5D6A7 !important; }',
+  '@media (min-width: 600px) { .brand-zone { background: #1B5E20 !important; } }'
+];
+```
 
 ### nav-tasks-link
 
@@ -116,6 +143,8 @@ Lists tasks whose status is in `WAITING_STATUSES`, soonest due first, each with 
 | `EMPTY` | `'Nothing is waiting on you right now.'` |
 | `BOARD_LINK` | `'View whole task board'` |
 
+Pictured at the top of this page.
+
 ### home-recent
 
 For each task, the newest public comment or change made by someone other than the viewer within the last `DAYS` days, newest first. Clicking opens the task side panel.
@@ -126,6 +155,8 @@ For each task, the newest public comment or change made by someone other than th
 | `DAYS` | `14` |
 | `EMPTY` | `'No updates in the last 14 days.'` |
 | `MAX_ROWS` | `5` |
+
+![The Recently updated card listing five tasks, each with who changed it, what they did and how long ago](docs/screenshots/recently-updated.jpg)
 
 ### home-requests
 
@@ -146,6 +177,8 @@ The client's active projects in alphabetical order, hiding Moxie's own "Projects
 | `TITLE` | `'Projects'` |
 | `MAX_ROWS` | `5` |
 
+![The Projects card listing two projects, each with a count of tasks waiting on the client](docs/screenshots/projects-rev.jpg)
+
 **How Home cards are placed.** The cards form a block above Moxie's own dashboard, in the rows set by `HOME_CARDS`. Moxie's dashboard stays below with whatever else it holds, minus the built-in cards that Requests and Projects stand in for. A card appears only once its data has loaded, so nothing shows half-filled, and the cards are rendered again each time the viewer arrives on Home.
 
 ## Buy me a tea?
@@ -156,11 +189,12 @@ Thank for trying out these client portal widgets.  Feedback welcome!
 
 ## Writing your own snippet
 
-A snippet is a self-contained function registered with `MoxiePortal.ready`. It runs when the viewer's client passes `CLIENT_FILTER`, and runs again whenever the viewer switches to another client that passes. Styles, hooks and Home cards registered during a run are removed automatically when that happens; return a function if there is anything else to undo.
+A snippet is a self-contained function registered with `MoxiePortal.ready`. It runs when the viewer's client passes `CLIENT_FILTER` and the snippet's own `onlyFor` filter, if it gives one, and runs again whenever the viewer switches to another client that passes. Styles, hooks and Home cards registered during a run are removed automatically when that happens; return a function if there is anything else to undo.
 
 ```js
 (function () {
   var GREETING = 'Welcome back';
+  var ONLY_FOR = null;   // or { ClientType: 'TNC' }
 
   MoxiePortal.ready(function (portal) {
     portal.home.mount({
@@ -171,7 +205,7 @@ A snippet is a self-contained function registered with `MoxiePortal.ready`. It r
         return card;
       }
     });
-  });
+  }, { onlyFor: ONLY_FOR });
 })();
 ```
 

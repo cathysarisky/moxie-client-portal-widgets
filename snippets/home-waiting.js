@@ -5,6 +5,9 @@
   var TITLE = 'Waiting on you';
   var EMPTY = 'Nothing is waiting on you right now.';
   var BOARD_LINK = 'View whole task board';
+  // Run only for clients whose custom fields match, e.g. { ClientType: 'TNC' }.
+  // null means every client the parent script allows.
+  var ONLY_FOR = null;
 
   MoxiePortal.ready(function (portal) {
     portal.home.mount({
@@ -37,5 +40,5 @@
         });
       }
     });
-  });
+  }, { onlyFor: ONLY_FOR });
 })();

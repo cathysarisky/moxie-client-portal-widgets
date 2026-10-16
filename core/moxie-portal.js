@@ -14,10 +14,11 @@
   // Settings
   // ---------------------------------------------------------------------------
 
-  // Run snippets only for clients whose custom fields match every entry here.
-  // Keys are the custom field's mapping key; values are compared ignoring case.
-  // Set to null to run for every client.
-  var CLIENT_FILTER = { ClientType: 'TEST' };
+  // Run snippets only for clients whose custom fields match every entry here, e.g.
+  // { ClientType: 'TNC' }. Keys are the custom field's mapping key; values are compared
+  // ignoring case. null runs for every client. Each snippet can narrow this further
+  // with its own ONLY_FOR setting.
+  var CLIENT_FILTER = null;
 
   // Task status labels that mean the client has to do something.
   var WAITING_STATUSES = ['Wait on client', 'Ready for approval'];
@@ -149,20 +150,32 @@
   // Registration. Works before the portal's app has been found.
   // ---------------------------------------------------------------------------
 
-  var snippets = [];   // every fn passed to ready()
+  var snippets = [];   // { fn, onlyFor } for every ready() call
   var active = null;   // { cleanups: [], styles: [] } while a matching client is active
   var portal = null;   // built in start()
 
-  function ready(fn) {
-    if (typeof fn !== 'function') return;
-    snippets.push(fn);
-    if (active) runSnippet(fn);
+  // True when a client's custom values satisfy a filter such as { ClientType: 'TNC' }.
+  // A null filter matches everyone.
+  function matches(filter, values) {
+    if (!filter) return true;
+    return Object.keys(filter).every(function (key) {
+      return norm(values[key]) === norm(filter[key]);
+    });
   }
 
-  function runSnippet(fn) {
+  // ready(fn) or ready(fn, { onlyFor: { ClientType: 'TNC' } }) to narrow the client filter.
+  function ready(fn, options) {
+    if (typeof fn !== 'function') return;
+    var snippet = { fn: fn, onlyFor: (options && options.onlyFor) || null };
+    snippets.push(snippet);
+    if (active) runSnippet(snippet);
+  }
+
+  function runSnippet(snippet) {
+    if (!matches(snippet.onlyFor, portal.clientValues())) return;
     var activation = active;
     try {
-      var cleanup = fn(portal);
+      var cleanup = snippet.fn(portal);
       if (typeof cleanup === 'function' && activation === active) activation.cleanups.push(cleanup);
     } catch (err) {
       warn('snippet failed', err);
@@ -516,17 +529,11 @@
     };
 
     // --- lifecycle -----------------------------------------------------------
-    function passes() {
-      if (!CLIENT_FILTER) return true;
-      var values = clientValues();
-      return Object.keys(CLIENT_FILTER).every(function (key) {
-        return norm(values[key]) === norm(CLIENT_FILTER[key]);
-      });
-    }
+    function passes() { return matches(CLIENT_FILTER, clientValues()); }
 
     function activate() {
       active = { cleanups: [], styles: [] };
-      snippets.slice().forEach(function (fn) { runSnippet(fn); });
+      snippets.slice().forEach(function (snippet) { runSnippet(snippet); });
     }
 
     function deactivate() {

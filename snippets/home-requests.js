@@ -5,6 +5,9 @@
   var TITLE = 'Requests';
   var EMPTY = 'No open requests.';
   var MAX_ROWS = 5;
+  // Run only for clients whose custom fields match, e.g. { ClientType: 'TNC' }.
+  // null means every client the parent script allows.
+  var ONLY_FOR = null;
 
   MoxiePortal.ready(function (portal) {
     // Same colour lookup the portal uses for ticket status dots.
@@ -39,5 +42,5 @@
         });
       }
     });
-  });
+  }, { onlyFor: ONLY_FOR });
 })();
