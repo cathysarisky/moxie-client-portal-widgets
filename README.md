@@ -100,6 +100,8 @@ Each snippet has its editable text and settings at the top of its file. Every on
 
 Hides the workspace logo above the left menu, or shows a different image in its place, with optional sizing. The portal switches to a separate small image while the menu is collapsed, and that one has its own setting.
 
+**Note: Logo swapping can lead to a noticeable flash of the original logo. Use with caution **
+
 | Setting | Default | Meaning |
 |---|---|---|
 | `LOGO_CHANGE` | `'none'` | Logo while the menu is expanded. `'none'` hides it; a URL such as `'https://example.com/logo.png'` shows that image instead; `''` leaves the workspace logo alone |
@@ -108,6 +110,8 @@ Hides the workspace logo above the left menu, or shows a different image in its 
 | `LOGO_HEIGHT` | `''` | Expanded logo height, e.g. `48` (pixels); `''` keeps the portal's sizing. Sizes apply to a replacement logo or to the original one, and the image keeps its proportions when only one side is given |
 
 ### custom-css
+
+**Note: Large scale recoloring can lead to a noticeable change from old to new style. Use with caution ** 
 
 Adds your own style rules to the portal. Because of `ONLY_FOR`, this is how you give one group of clients a different look: a menu colour, a hidden element, a different font.
 
