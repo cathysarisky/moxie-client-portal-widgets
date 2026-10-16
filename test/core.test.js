@@ -141,3 +141,118 @@ test('portal.api fetches the portal endpoint with the bearer token and rejects o
   assert.equal(t.calls[0], 'https://pod.test/api/v1/42/portal/client-1/projects');
   await assert.rejects(portal.api('/nope'), /HTTP 404/);
 });
+
+const fixtures = () => ({
+  '/projects': [
+    { id: 'p1', name: 'Beta site', active: true, portalAccess: 'Full access', lifecycleStatus: 'ACTIVE' },
+    { id: 'p2', name: 'Alpha site', active: true, portalAccess: 'Overview', lifecycleStatus: 'ACTIVE' },
+    { id: 'p3', name: 'Old', active: false, portalAccess: 'Full access', lifecycleStatus: 'ACTIVE' },
+    { id: 'p4', name: 'Assigned only', active: true, portalAccess: 'Read only', lifecycleStatus: 'ACTIVE', portalAccessAssignedOnly: true }
+  ],
+  '/projectTypes': [
+    { id: 't1', statusList: [{ id: 's1', label: 'Wait on client', hexColor: '#f00' }, { id: 's2', label: 'In progress', hexColor: '#0f0' }] }
+  ],
+  '/deliverables?projectTypeId=t1': [
+    { id: 'd1', name: 'Zed task', projectId: 'p1', statusId: 's1', dueDate: '2026-11-02' },
+    { id: 'd2', name: 'Able task', projectId: 'p1', statusId: 's1' },
+    { id: 'd3', name: 'Done', projectId: 'p1', statusId: 's2' },
+    { id: 'd4', name: 'Hidden project', projectId: 'p2', statusId: 's1' },
+    { id: 'd5', name: 'Archived', projectId: 'p1', statusId: 's1', archived: true },
+    { id: 'd6', name: 'Mine', projectId: 'p4', statusId: 's1', assignedToList: ['me'] },
+    { id: 'd7', name: 'Not mine', projectId: 'p4', statusId: 's1', assignedToList: ['someone'] }
+  ],
+  '/tickets?open=true': [
+    { id: 'k1', subject: 'Older', updated: '2026-10-01T00:00:00Z' },
+    { id: 'k2', subject: 'Newer', updated: '2026-10-10T00:00:00Z' },
+    { id: 'k3', subject: 'Closed', open: false, updated: '2026-10-12T00:00:00Z' },
+    { id: 'k4', subject: 'Archived', archived: true, updated: '2026-10-12T00:00:00Z' }
+  ],
+  '/tickets/settings': [{ id: 'tt1', statusColors: [] }]
+});
+
+function withPortal(opts) {
+  const t = boot(opts);
+  t.MoxiePortal.ready((p) => { t.portal = p; });
+  return t;
+}
+
+test('data getters fetch once until refresh', async () => {
+  const t = withPortal({ responses: fixtures() });
+  const a = await t.portal.data.projects();
+  const b = await t.portal.data.projects();
+  assert.equal(a, b);
+  assert.equal(t.calls.filter((u) => u.endsWith('/projects')).length, 1);
+  t.portal.data.refresh();
+  await t.portal.data.projects();
+  assert.equal(t.calls.filter((u) => u.endsWith('/projects')).length, 2);
+});
+
+test('a failed fetch is not cached', async () => {
+  const t = withPortal({ responses: {} });
+  await assert.rejects(t.portal.data.projects(), /HTTP 404/);
+  await assert.rejects(t.portal.data.projects(), /HTTP 404/);
+  assert.equal(t.calls.length, 2);
+});
+
+test('tasks joins deliverables with project and status, applying the portal visibility rules', async () => {
+  const t = withPortal({ responses: fixtures() });
+  const items = await t.portal.data.tasks();
+  assert.deepEqual(plain(items.map((i) => i.task.id).sort()), ['d1', 'd2', 'd3', 'd6']);
+  const d1 = items.find((i) => i.task.id === 'd1');
+  assert.equal(d1.project.name, 'Beta site');
+  assert.equal(d1.status.label, 'Wait on client');
+  assert.equal(d1.statusList.length, 2);
+});
+
+test('waitingTasks keeps WAITING_STATUSES only, due dates first then by name', async () => {
+  const t = withPortal({ responses: fixtures() });
+  const waiting = await t.portal.data.waitingTasks();
+  assert.deepEqual(plain(waiting.map((i) => i.task.id)), ['d1', 'd2', 'd6']);
+});
+
+test('tickets are open, unarchived, newest first; settings are passed through', async () => {
+  const t = withPortal({ responses: fixtures() });
+  const tickets = await t.portal.data.tickets();
+  assert.deepEqual(plain(tickets.map((k) => k.id)), ['k2', 'k1']);
+  assert.equal((await t.portal.data.ticketSettings())[0].id, 'tt1');
+});
+
+test('disabled features resolve to empty lists without fetching', async () => {
+  const t = withPortal({ responses: fixtures(), features: { projectsEnabled: false, ticketsEnabled: false } });
+  assert.deepEqual(plain(await t.portal.data.projects()), []);
+  assert.deepEqual(plain(await t.portal.data.tasks()), []);
+  assert.deepEqual(plain(await t.portal.data.tickets()), []);
+  assert.deepEqual(plain(await t.portal.data.ticketSettings()), []);
+  assert.equal(t.calls.length, 0);
+});
+
+test('the cache is cleared when the client changes', async () => {
+  const t = withPortal({ responses: fixtures() });
+  await t.portal.data.projects();
+  t.store.getters.getClientId = 'client-2';
+  t.store.notify();
+  await t.portal.data.projects();
+  assert.equal(t.calls.filter((u) => u.endsWith('/projects')).length, 2);
+  assert.match(t.calls[t.calls.length - 1], /client-2\/projects$/);
+});
+
+test('tasks.visible follows the portal rule and tasks.open opens the side panel', async () => {
+  const t = withPortal({ responses: Object.assign(fixtures(), { '/deliverables/d1': { id: 'd1', full: true } }) });
+  assert.equal(t.portal.tasks.visible({ active: true, portalAccess: 'Read only', lifecycleStatus: 'ACTIVE' }), true);
+  assert.equal(t.portal.tasks.visible({ active: true, portalAccess: 'Overview', lifecycleStatus: 'ACTIVE' }), false);
+  assert.equal(t.portal.tasks.visible({ active: true, portalAccess: 'Full access', lifecycleStatus: 'PAUSED' }), false);
+  const opened = [];
+  t.store.state.globalModalController.openModal = (...args) => { opened.push(args); return Promise.resolve(); };
+  const item = { task: { id: 'd1' }, project: { id: 'p1' }, statusList: [] };
+  await t.portal.tasks.open(item);
+  assert.equal(opened[0][0].name, 'DeliverableDetail');
+  assert.deepEqual(plain(opened[0][1]), { origDeliverable: { id: 'd1', full: true }, project: { id: 'p1' }, statusList: [], subtasks: [] });
+  assert.deepEqual(opened[0].slice(2), [true, false, 'right-panel']);
+});
+
+test('tasks.open falls back to the project board when the panel cannot open', async () => {
+  const t = withPortal({ responses: fixtures() });
+  await t.portal.tasks.open({ task: { id: 'missing' }, project: { id: 'p1' }, statusList: [] });
+  assert.equal(t.router.currentRoute.path, '/projects/p1');
+  assert.equal(t.router.currentRoute.query.v, 'tasks');
+});
