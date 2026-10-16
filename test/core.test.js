@@ -256,3 +256,64 @@ test('tasks.open falls back to the project board when the panel cannot open', as
   assert.equal(t.router.currentRoute.path, '/projects/p1');
   assert.equal(t.router.currentRoute.query.v, 'tasks');
 });
+
+test('card builds a header with icon, title, count and optional open arrow', () => {
+  const t = withPortal();
+  const p = t.portal;
+  const card = p.card({ title: 'Requests', icon: p.icons.ticket, count: 3, openPath: '/requests' });
+  assert.equal(card.tagName, 'SECTION');
+  assert.equal(card.className, 'mp-card');
+  assert.equal(card.querySelector('.mp-head h3').textContent, 'Requests');
+  assert.equal(card.querySelector('.mp-count').textContent, '3');
+  assert.equal(card.querySelector('.mp-icon svg path').getAttribute('d'), 'M2 9a3 3 0 0 1 0 6v2a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-2a3 3 0 0 1 0-6V7a2 2 0 0 0-2-2H4a2 2 0 0 0-2 2Z');
+  card.querySelector('.mp-open').click();
+  assert.equal(t.router.currentRoute.path, '/requests');
+  const plainCard = p.card({ title: 'Waiting', icon: p.icons.tasks, count: 0 });
+  assert.equal(plainCard.querySelector('.mp-open'), null);
+});
+
+test('row, empty and footer build the portal-styled pieces', () => {
+  const t = withPortal();
+  const p = t.portal;
+  let clicked = 0;
+  const r = p.row('Fix nav', 'Wait on client · Beta', '#ff0000', () => { clicked++; });
+  assert.equal(r.tagName, 'BUTTON');
+  assert.equal(r.type, 'button');
+  assert.equal(r.className, 'portal-action-row');
+  assert.equal(r.querySelector('strong').textContent, 'Fix nav');
+  assert.equal(r.querySelector('small').textContent, 'Wait on client · Beta');
+  assert.equal(r.querySelector('.mp-dot').style.background, 'rgb(255, 0, 0)');
+  r.click();
+  assert.equal(clicked, 1);
+  assert.equal(p.row('No meta', null, null, () => {}).querySelector('small'), null);
+  assert.equal(p.empty('Nothing').outerHTML, '<p class="mp-empty">Nothing</p>');
+  const f = p.footer('View board', () => { clicked++; });
+  assert.equal(f.className, 'mp-footer');
+  assert.equal(f.querySelector('span').textContent, 'View board');
+  f.click();
+  assert.equal(clicked, 2);
+});
+
+test('timeAgo and formatDue', () => {
+  const t = withPortal();
+  const p = t.portal;
+  const now = Date.now();
+  assert.equal(p.timeAgo(now), 'just now');
+  assert.equal(p.timeAgo(now - 5 * 60000), '5 min ago');
+  assert.equal(p.timeAgo(now - 60 * 60000), '1 hour ago');
+  assert.equal(p.timeAgo(now - 3 * 3600000), '3 hours ago');
+  assert.equal(p.timeAgo(now - 26 * 3600000), 'yesterday');
+  assert.equal(p.timeAgo(now - 72 * 3600000), '3 days ago');
+  assert.equal(p.formatDue('2026-11-02T00:00:00'), 'Due Nov 2');
+  assert.equal(p.formatDue(null), null);
+  assert.equal(p.formatDue('garbage'), null);
+});
+
+test('shared card CSS is injected once with mp- names and nothing swc', () => {
+  const t = boot();
+  const style = t.document.getElementById('mp-shared-style');
+  assert.ok(style);
+  assert.match(style.textContent, /\.mp-card \{/);
+  assert.match(style.textContent, /\[data-mp-hidden\]/);
+  assert.doesNotMatch(t.source, /swc/i);
+});
