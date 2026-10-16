@@ -42,8 +42,7 @@ Everything happens in your browser: copy a file from this repository, paste it i
 4. In the pasted text, find the settings near the top: `var CLIENT_FILTER`, `var WAITING_STATUSES` and `var HOME_CARDS`. Change them for your workspace; [Parent settings](#parent-settings) explains each. The defaults run for every client and show all four Home cards.
 5. For each widget you want, open its file in the [snippets](snippets/) folder, copy it the same way, click at the very end of the box and paste it there. Snippets can go in any order, as long as every one of them is below the parent.
 6. Save.
-7. Look at the portal as a client: sign in as a portal contact, or use **Preview as contact** on a client's Portal access tab. Reload only a few times in a row; see [what could break](#how-it-works-and-what-could-break).
-
+7. Check your work by viewing as a client.
 If nothing shows up, the usual reason is `CLIENT_FILTER`: the client you are looking at does not match it.
 
 ### Changing or removing a snippet later
