@@ -10,13 +10,6 @@
   var ONLY_FOR = null;
 
   MoxiePortal.ready(function (portal) {
-    // Same colour lookup the portal uses for ticket status dots.
-    function statusColor(ticket, types) {
-      var type = types.filter(function (x) { return String(x.id) === String(ticket.type); })[0];
-      var match = type && (type.statusColors || []).filter(function (c) { return c && c.status === ticket.status; })[0];
-      return match && /^#[0-9a-f]{3,8}$/i.test(match.hexColor) ? match.hexColor : 'var(--v-accent-base)';
-    }
-
     portal.home.mount({
       name: 'requests',
       replaces: 'Tickets',
@@ -35,7 +28,7 @@
             var updated = Date.parse(t.updated);
             var meta = ['#' + t.ticketNumber, t.status, t.unreadClient ? 'New reply' : null, updated ? 'updated ' + portal.timeAgo(updated) : null]
               .filter(Boolean).join(' · ');
-            list.appendChild(portal.row(t.subject, meta, statusColor(t, types), function () { portal.go('/requests/' + t.id); }));
+            list.appendChild(portal.row(t.subject, meta, portal.tickets.statusColor(t, types), function () { portal.go('/requests/' + t.id); }));
           });
           card.appendChild(list);
           return card;

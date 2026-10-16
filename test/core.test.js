@@ -162,12 +162,13 @@ const fixtures = () => ({
     { id: 'd7', name: 'Not mine', projectId: 'p4', statusId: 's1', assignedToList: ['someone'] }
   ],
   '/tickets?open=true': [
-    { id: 'k1', subject: 'Older', updated: '2026-10-01T00:00:00Z' },
-    { id: 'k2', subject: 'Newer', updated: '2026-10-10T00:00:00Z' },
-    { id: 'k3', subject: 'Closed', open: false, updated: '2026-10-12T00:00:00Z' },
-    { id: 'k4', subject: 'Archived', archived: true, updated: '2026-10-12T00:00:00Z' }
+    { id: 'k1', subject: 'Older', type: 'tt1', status: 'WAITING on client', updated: '2026-10-01T00:00:00Z' },
+    { id: 'k2', subject: 'Newer', type: 'tt1', status: 'Open', updated: '2026-10-10T00:00:00Z' },
+    { id: 'k3', subject: 'Closed', type: 'tt1', status: 'Waiting on client', open: false, updated: '2026-10-12T00:00:00Z' },
+    { id: 'k4', subject: 'Archived', type: 'tt1', status: 'Waiting on client', archived: true, updated: '2026-10-12T00:00:00Z' },
+    { id: 'k5', subject: 'Middle', type: 'tt1', status: 'Feedback Requested', updated: '2026-10-05T00:00:00Z' }
   ],
-  '/tickets/settings': [{ id: 'tt1', statusColors: [] }]
+  '/tickets/settings': [{ id: 'tt1', statusColors: [{ status: 'Waiting on client', hexColor: '#abc' }, { status: 'Open', hexColor: 'nope' }] }]
 });
 
 function withPortal(opts) {
@@ -213,8 +214,23 @@ test('waitingTasks keeps WAITING_STATUSES only, due dates first then by name', a
 test('tickets are open, unarchived, newest first; settings are passed through', async () => {
   const t = withPortal({ responses: fixtures() });
   const tickets = await t.portal.data.tickets();
-  assert.deepEqual(plain(tickets.map((k) => k.id)), ['k2', 'k1']);
+  assert.deepEqual(plain(tickets.map((k) => k.id)), ['k2', 'k5', 'k1']);
   assert.equal((await t.portal.data.ticketSettings())[0].id, 'tt1');
+});
+
+test('waitingTickets keeps open tickets in TICKET_WAITING_STATUSES, ignoring case, newest first', async () => {
+  const t = withPortal({ responses: fixtures() });
+  const waiting = await t.portal.data.waitingTickets();
+  assert.deepEqual(plain(waiting.map((k) => k.id)), ['k5', 'k1']);
+});
+
+test('tickets.statusColor takes the hex colour from the ticket type, else the accent variable', () => {
+  const t = withPortal({ responses: fixtures() });
+  const types = [{ id: 1, statusColors: [{ status: 'Waiting on client', hexColor: '#abc' }, { status: 'Open', hexColor: 'nope' }] }];
+  assert.equal(t.portal.tickets.statusColor({ type: '1', status: 'Waiting on client' }, types), '#abc');
+  assert.equal(t.portal.tickets.statusColor({ type: '1', status: 'Open' }, types), 'var(--v-accent-base)');
+  assert.equal(t.portal.tickets.statusColor({ type: '2', status: 'Waiting on client' }, types), 'var(--v-accent-base)');
+  assert.equal(t.portal.tickets.statusColor({ type: '1', status: 'Waiting on client' }, []), 'var(--v-accent-base)');
 });
 
 test('disabled features resolve to empty lists without fetching', async () => {
@@ -222,6 +238,7 @@ test('disabled features resolve to empty lists without fetching', async () => {
   assert.deepEqual(plain(await t.portal.data.projects()), []);
   assert.deepEqual(plain(await t.portal.data.tasks()), []);
   assert.deepEqual(plain(await t.portal.data.tickets()), []);
+  assert.deepEqual(plain(await t.portal.data.waitingTickets()), []);
   assert.deepEqual(plain(await t.portal.data.ticketSettings()), []);
   assert.equal(t.calls.length, 0);
 });

@@ -7,7 +7,7 @@ Drop-in customisations for the [Moxie](https://www.withmoxie.com) client portal.
 | `logo` | Hides the workspace logo above the menu, or shows a different image in its place. |
 | `custom-css` | Adds your own style rules, for every client or only for the clients you name. |
 | `nav-tasks-link` | Adds a **Tasks** menu item that opens the client's task board for their first project. |
-| `home-waiting` | Home card listing the tasks that are waiting on the client. |
+| `home-waiting` | Home card listing the tasks and requests that are waiting on the client. |
 | `home-recent` | Home card showing the latest comment or change on each task. |
 | `home-requests` | Replaces the Home Requests card with every open ticket for the client. |
 | `home-projects` | Replaces the Home "Projects" card with the client's actual projects. |
@@ -43,7 +43,7 @@ Everything happens in your browser: copy a file from this repository, paste it i
 1. In Moxie, open **Settings > Client Portal > Advanced** and find the **JavaScript embed code** box. Keep that tab open.
 2. Open [core/moxie-portal.js](core/moxie-portal.js) on GitHub and click the **Copy raw file** button above the code (the two-squares icon), or select all of the text and copy it.
 3. Paste it into the box. This is the parent script, and it must be the first thing in the box.
-4. In the pasted text, find the settings near the top: `var CLIENT_FILTER`, `var WAITING_STATUSES` and `var HOME_CARDS`. Change them for your workspace; [Parent settings](#parent-settings) explains each. The defaults run for every client and show all four Home cards.
+4. In the pasted text, find the settings near the top: `var CLIENT_FILTER`, `var WAITING_STATUSES`, `var TICKET_WAITING_STATUSES` and `var HOME_CARDS`. Change them for your workspace; [Parent settings](#parent-settings) explains each. The defaults run for every client and show all four Home cards.
 5. For each widget you want, open its file in the [snippets](snippets/) folder, copy it the same way, click at the very end of the box and paste it there. Snippets can go in any order, as long as every one of them is below the parent.
 6. Save.
 7. Check your work by viewing as a client.
@@ -57,7 +57,7 @@ To remove a snippet, delete its block: from its banner comment down to the line 
 
 ## Parent settings
 
-All three are near the top of the parent script, whether you edit it in the Moxie box or in the file.
+All four are near the top of the parent script, whether you edit it in the Moxie box or in the file.
 
 **`CLIENT_FILTER`** decides which clients see any of the snippets. It maps client custom-field *mapping keys* to required values. A client passes when every entry matches; case and surrounding spaces are ignored. Each snippet can narrow this further with its own `ONLY_FOR` setting, described under [Snippets](#snippets).
 
@@ -73,6 +73,12 @@ The mapping key is the field's identifier in Moxie's client custom-field setting
 
 ```js
 var WAITING_STATUSES = ['Wait on client', 'Ready for approval'];
+```
+
+**`TICKET_WAITING_STATUSES`** does the same for requests: the ticket status labels that mean "the client needs to act". The Waiting on you card shows those tickets above its tasks. Labels must match the status names in your ticket types, apart from case.
+
+```js
+var TICKET_WAITING_STATUSES = ['Waiting on client', 'Client Feedback Needed', 'Feedback Requested'];
 ```
 
 **`HOME_CARDS`** arranges the Home cards. Each inner list is one row; the cards in it sit side by side and share the row's width (on a phone they stack). A name on its own, outside any inner list, gets a row to itself. Order in the list is order on the page.
@@ -152,13 +158,14 @@ Adds a **Tasks** item right after **Projects** in the left menu. It opens the ta
 
 ### home-waiting
 
-Lists tasks whose status is in `WAITING_STATUSES`, soonest due first, each with its status colour, project and due date. Clicking a task opens the task side panel, and the cards refresh when it closes. A footer links to each project's task board. Hidden when projects are turned off for the client.
+Lists open tickets whose status is in the parent's `TICKET_WAITING_STATUSES`, newest activity first, each with its ticket number, status and status colour, followed by tasks whose status is in `WAITING_STATUSES`, soonest due first, each with its status colour, project and due date. The count in the header covers both. Clicking a ticket opens it on the Requests page. Clicking a task opens the task side panel, and the cards refresh when it closes. A footer links to each project's task board. Tasks are left out when projects are turned off for the client and tickets when tickets are; the card is hidden when both are off.
 
-| Setting | Default |
-|---|---|
-| `TITLE` | `'Waiting on you'` |
-| `EMPTY` | `'Nothing is waiting on you right now.'` |
-| `BOARD_LINK` | `'View whole task board'` |
+| Setting | Default | Meaning |
+|---|---|---|
+| `TITLE` | `'Waiting on you'` | |
+| `EMPTY` | `'Nothing is waiting on you right now.'` | |
+| `BOARD_LINK` | `'View whole task board'` | |
+| `TICKET_PREFIX` | `'Request #'` | Shown before the ticket number in each ticket row |
 
 Pictured at the top of this page.
 
@@ -266,6 +273,7 @@ The bundled files stick to ES5 (`var`, `function`) so they paste anywhere withou
 | `portal.data.tasks()` | Tasks the viewer may see, as `{ task, project, status, statusList }` |
 | `portal.data.waitingTasks()` | Tasks in a `WAITING_STATUSES` status, soonest due first |
 | `portal.data.tickets()` | Open tickets, newest activity first |
+| `portal.data.waitingTickets()` | Open tickets in a `TICKET_WAITING_STATUSES` status, newest activity first |
 | `portal.data.ticketSettings()` | Ticket types, including status colours |
 | `portal.data.refresh()` | Forget cached data |
 
@@ -275,6 +283,12 @@ The bundled files stick to ES5 (`var`, `function`) so they paste anywhere withou
 |---|---|
 | `portal.tasks.visible(project)` | Whether the portal shows this project's tasks |
 | `portal.tasks.open(item)` | Open the side panel for a `tasks()` item; Home cards refresh when it closes |
+
+**Tickets**
+
+| Member | Meaning |
+|---|---|
+| `portal.tickets.statusColor(ticket, types)` | The hex colour the portal gives this ticket's status, looked up in `ticketSettings()`; the accent colour variable when there is none |
 
 **UI helpers**
 

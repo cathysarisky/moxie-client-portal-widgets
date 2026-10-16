@@ -23,6 +23,9 @@
   // Task status labels that mean the client has to do something.
   var WAITING_STATUSES = ['Wait on client', 'Ready for approval'];
 
+  // Ticket (request) status labels that mean the client has to do something.
+  var TICKET_WAITING_STATUSES = ['Waiting on client', 'Client Feedback Needed', 'Feedback Requested'];
+
   // Home page cards, in display order. Each inner list is one row of cards shown side by
   // side (they stack on narrow screens); a name on its own is a row by itself. Remove a
   // name to drop that card. Pasted cards missing from this list are shown after it, one
@@ -316,6 +319,15 @@
       }
     };
 
+    var tickets = {
+      // Same colour lookup the portal uses for ticket status dots. types is ticketSettings().
+      statusColor: function (ticket, types) {
+        var type = (types || []).filter(function (x) { return String(x.id) === String(ticket.type); })[0];
+        var match = type && (type.statusColors || []).filter(function (c) { return c && c.status === ticket.status; })[0];
+        return match && /^#[0-9a-f]{3,8}$/i.test(match.hexColor) ? match.hexColor : 'var(--v-accent-base)';
+      }
+    };
+
     var data = {
       refresh: function () { cache = {}; },
       projects: function () {
@@ -371,6 +383,12 @@
             open.sort(function (a, b) { return (Date.parse(b.updated) || 0) - (Date.parse(a.updated) || 0); });
             return open;
           });
+        });
+      },
+      waitingTickets: function () {
+        return data.tickets().then(function (list) {
+          var wanted = TICKET_WAITING_STATUSES.map(norm);
+          return list.filter(function (t) { return wanted.indexOf(norm(t.status)) !== -1; });
         });
       },
       ticketSettings: function () {
@@ -523,7 +541,7 @@
       store: store, router: router, go: go,
       clientId: clientId, clientValues: clientValues, user: user, features: features,
       api: api, style: style, onRoute: onRoute, onDom: onDom,
-      data: data, tasks: tasks, home: home,
+      data: data, tasks: tasks, tickets: tickets, home: home,
       el: el, svg: svg, button: button, card: card, row: row, empty: empty, footer: footer,
       norm: norm, timeAgo: timeAgo, formatDue: formatDue, icons: ICONS
     };
