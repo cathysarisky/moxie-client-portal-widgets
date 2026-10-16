@@ -34,6 +34,8 @@ Load the portal sparingly while testing. Moxie's sign-in service blocks an addre
 
 **The sign in screen is not affected**, so it's going to look however it looks.  Can't change it, sorry!
 
+**Moxie's authentication system gets grouchy if you reload the page repeatedly. If you suddenly find yourself logged out and unable to log in, wait 5-10 minutes for it to reset.
+
 ## Install
 
 Everything happens in your browser: copy a file from this repository, paste it into Moxie.
