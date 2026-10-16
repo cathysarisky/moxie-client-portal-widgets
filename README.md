@@ -32,6 +32,8 @@ it in a way that better suits our own businesses.
 
 Load the portal sparingly while testing. Moxie's sign-in service blocks an address that loads the portal roughly fifteen times in five minutes, for a couple of minutes, and that includes your own browser.
 
+**The sign in screen is not affected**, so it's going to look however it looks.  Can't change it, sorry!
+
 ## Install
 
 Everything happens in your browser: copy a file from this repository, paste it into Moxie.
