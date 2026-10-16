@@ -3,12 +3,14 @@
  * name. Paste below the MoxiePortal parent script. */
 (function () {
   // One rule per line, each inside quotes and ending with a comma. Use double quotes
-  // inside a rule, e.g. url("https://example.com/bg.png"). The lines below recolour the
-  // left menu; replace them with your own.
+  // inside a rule, e.g. url("https://example.com/bg.png").
+  // The portal takes most of its colours from CSS variables set on the app container, so
+  // a '#app { --name: value !important; }' line changes everything that uses that variable.
+  // See docs/css-variables.md for the list. The lines below recolour the left menu;
+  // replace them with your own.
   var CSS = [
-    '#left-nav { background-color: #1B5E20 !important; }',
-    '#left-nav .portal-nav-link.is-active::before { border-left-color: #A5D6A7 !important; }',
-    '@media (min-width: 600px) { .brand-zone { background: #1B5E20 !important; } }'
+    '#app { --v-sidebar-base: #1B5E20 !important; }',
+    '#left-nav .portal-nav-link.is-active::before { border-left-color: #A5D6A7 !important; }'
   ];
   // Run only for clients whose custom fields match, e.g. { ClientType: 'TNC' }.
   // null means every client the parent script allows.

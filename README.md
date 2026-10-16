@@ -113,17 +113,26 @@ Adds your own style rules to the portal. Because of `ONLY_FOR`, this is how you 
 
 | Setting | Default | Meaning |
 |---|---|---|
-| `CSS` | three lines that colour the left menu green | One rule per line. Each line sits inside single quotes and ends with a comma, so use double quotes inside a rule, as in `url("https://...")` |
+| `CSS` | two lines that colour the left menu green | One rule per line. Each line sits inside single quotes and ends with a comma, so use double quotes inside a rule, as in `url("https://...")` |
 
-The default lines recolour the left menu and the brand area above it on wider screens:
+The default lines recolour the left menu, by changing the variable its background comes from, and the marker beside the selected menu item:
 
 ```js
 var CSS = [
-  '#left-nav { background-color: #1B5E20 !important; }',
-  '#left-nav .portal-nav-link.is-active::before { border-left-color: #A5D6A7 !important; }',
-  '@media (min-width: 600px) { .brand-zone { background: #1B5E20 !important; } }'
+  '#app { --v-sidebar-base: #1B5E20 !important; }',
+  '#left-nav .portal-nav-link.is-active::before { border-left-color: #A5D6A7 !important; }'
 ];
 ```
+
+**Changing the portal's colour variables.** The first default line is the pattern: the portal reads most of its colours from CSS variables, and one rule that sets a variable recolours everything that uses it. The brand colour behind buttons, focus rings and selected choices, for example:
+
+```js
+var CSS = [
+  '#app { --brand-primary: #1B5E20 !important; }'
+];
+```
+
+Use `#app` as the selector and keep the `!important`: the portal writes its variables as an inline style on that container, and only an important declaration in a stylesheet, on that same element, wins over them. The variables the portal exposes, with example values and what each affects, are listed in [docs/css-variables.md](docs/css-variables.md).
 
 ### nav-tasks-link
 
