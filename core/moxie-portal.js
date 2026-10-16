@@ -74,9 +74,43 @@
     function user() { return store.state.loggedInUser || {}; }
     function features() { return store.getters.getFeatures || {}; }
 
+    function api(path) {
+      var g = store.getters;
+      return fetch(g.getPodUrl + 'api/v1/' + g.getAccountId + '/portal/' + g.getClientId + path, {
+        headers: { Authorization: 'Bearer ' + store.state.accessToken }
+      }).then(function (res) {
+        if (!res.ok) throw new Error('HTTP ' + res.status);
+        return res.json();
+      });
+    }
+
+    // --- styles and hooks, all dropped on deactivation ------------------------
+    var routeHooks = [];
+    var domHooks = [];
+
+    function style(css) {
+      var node = document.createElement('style');
+      node.textContent = css;
+      document.head.appendChild(node);
+      if (active) active.styles.push(node);
+      return node;
+    }
+    function onRoute(fn) { routeHooks.push(fn); }
+    function onDom(fn) { domHooks.push(fn); }
+    function runHooks(list, what, args) {
+      list.slice().forEach(function (fn) {
+        try { fn.apply(null, args || []); } catch (err) { warn(what + ' hook failed', err); }
+      });
+    }
+
+    // Replaced in the home-page section.
+    function place() {}
+    function refreshHome() {}
+
     portal = {
       store: store, router: router, go: go,
       clientId: clientId, clientValues: clientValues, user: user, features: features,
+      api: api, style: style, onRoute: onRoute, onDom: onDom,
       norm: norm
     };
 
@@ -102,12 +136,33 @@
         try { fn(); } catch (err) { warn('cleanup failed', err); }
       });
       finished.styles.forEach(function (node) { node.remove(); });
+      routeHooks = [];
+      domHooks = [];
     }
 
     function sync() {
       deactivate();
       if (passes()) activate();
     }
+
+    // --- one observer and one route hook for everyone ------------------------
+    var pending = false;
+    new MutationObserver(function () {
+      if (pending) return;
+      pending = true;
+      requestAnimationFrame(function () {
+        pending = false;
+        place();
+        runHooks(domHooks, 'onDom');
+      });
+    }).observe(document.body, { childList: true, subtree: true });
+
+    router.afterEach(function (to, from) {
+      setTimeout(function () {
+        if (to.path === '/welcome') refreshHome(); else place();
+        runHooks(routeHooks, 'onRoute', [to, from]);
+      }, 0);
+    });
 
     store.watch(function () { return clientId() + '|' + JSON.stringify(clientValues()); }, sync);
     sync();
