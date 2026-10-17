@@ -337,8 +337,10 @@ The bundled files stick to ES5 (`var`, `function`) so they paste anywhere withou
 | `portal.empty(text)` | Muted "nothing here" text |
 | `portal.footer(text, onClick)` | Full-width link at the bottom of a card |
 | `portal.el(tag, className, text)`, `portal.svg(paths, size)`, `portal.button(className, onClick)` | Element builders |
-| `portal.icons` | Lucide icon paths: `tasks`, `folder`, `chevron`, `arrow`, `ticket`, `history`, `listChecks`, `calendar` |
+| `portal.icons` | Lucide icon paths: `tasks`, `folder`, `chevron`, `arrow`, `ticket`, `history`, `listChecks`, `calendar`, `receipt` |
 | `portal.timeAgo(ms)`, `portal.formatDue(date)`, `portal.norm(s)` | Formatting helpers |
+| `portal.money(amount)` | An amount in the workspace currency, e.g. `$1,234.50` |
+| `portal.hours(seconds)` | Seconds as `h:mm`, rounded to the minute |
 
 **Home cards**
 

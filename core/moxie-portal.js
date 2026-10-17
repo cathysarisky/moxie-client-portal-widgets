@@ -48,7 +48,8 @@
     ticket: '<path d="M2 9a3 3 0 0 1 0 6v2a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-2a3 3 0 0 1 0-6V7a2 2 0 0 0-2-2H4a2 2 0 0 0-2 2Z"/><path d="M13 5v2"/><path d="M13 17v2"/><path d="M13 11v2"/>',
     history: '<path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/><path d="M12 7v5l4 2"/>',
     listChecks: '<path d="m3 17 2 2 4-4"/><path d="m3 7 2 2 4-4"/><path d="M13 6h8"/><path d="M13 12h8"/><path d="M13 18h8"/>',
-    calendar: '<path d="M8 2v4"/><path d="M16 2v4"/><rect width="18" height="18" x="3" y="4" rx="2"/><path d="M3 10h18"/><path d="M8 14h.01"/><path d="M12 14h.01"/><path d="M16 14h.01"/><path d="M8 18h.01"/><path d="M12 18h.01"/><path d="M16 18h.01"/>'
+    calendar: '<path d="M8 2v4"/><path d="M16 2v4"/><rect width="18" height="18" x="3" y="4" rx="2"/><path d="M3 10h18"/><path d="M8 14h.01"/><path d="M12 14h.01"/><path d="M16 14h.01"/><path d="M8 18h.01"/><path d="M12 18h.01"/><path d="M16 18h.01"/>',
+    receipt: '<path d="M4 2v20l2-1 2 1 2-1 2 1 2-1 2 1 2-1 2 1V2l-2 1-2-1-2 1-2-1-2 1-2-1-2 1Z"/><path d="M14 8H8"/><path d="M16 12H8"/><path d="M13 16H8"/>'
   };
 
   var shared = document.createElement('style');
@@ -150,6 +151,13 @@
     return days === 1 ? 'yesterday' : days + ' days ago';
   }
 
+  // Seconds as h:mm, rounded to the nearest minute: 5400 -> "1:30".
+  function hours(seconds) {
+    var mins = Math.round((Number(seconds) || 0) / 60);
+    var m = mins % 60;
+    return Math.floor(mins / 60) + ':' + (m < 10 ? '0' : '') + m;
+  }
+
   // ---------------------------------------------------------------------------
   // Registration. Works before the portal's app has been found.
   // ---------------------------------------------------------------------------
@@ -217,6 +225,18 @@
       var date = m ? new Date(+m[1], +m[2] - 1, +m[3]) : new Date(value);
       if (isNaN(date)) return null;
       return 'Due ' + date.toLocaleDateString(store.state.locale || undefined, { month: 'short', day: 'numeric' });
+    }
+
+    // An amount in the workspace currency, e.g. "$1,234.50".
+    function money(amount) {
+      var value = Number(amount) || 0;
+      try {
+        return new Intl.NumberFormat(store.state.locale || undefined, {
+          style: 'currency', currency: store.state.defaultCurrency || 'USD'
+        }).format(value);
+      } catch (err) {
+        return '$' + value.toFixed(2);
+      }
     }
 
     // A card shell: header with icon, title, count badge and optional arrow to openPath.
@@ -544,7 +564,7 @@
       api: api, style: style, onRoute: onRoute, onDom: onDom,
       data: data, tasks: tasks, tickets: tickets, home: home,
       el: el, svg: svg, button: button, card: card, row: row, empty: empty, footer: footer,
-      norm: norm, timeAgo: timeAgo, formatDue: formatDue, icons: ICONS
+      norm: norm, timeAgo: timeAgo, formatDue: formatDue, money: money, hours: hours, icons: ICONS
     };
 
     // --- lifecycle -----------------------------------------------------------
