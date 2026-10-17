@@ -66,6 +66,37 @@
     return out;
   }
 
+  function isUnbilled(e) {
+    if (e.billable === false) return false;
+    return e.billingStatus ? e.billingStatus === 'UN-BILLED' : !e.invoiceId;
+  }
+
+  function unbilledStats(entries) {
+    var out = { count: 0, seconds: 0, pricedSeconds: 0, unpricedSeconds: 0, estimate: 0, oldest: null };
+    entries.forEach(function (e) {
+      if (!isUnbilled(e)) return;
+      var secs = typeof e.unbilledSeconds === 'number' ? e.unbilledSeconds : (Number(e.duration) || 0);
+      var rate = Number(e.billingRate);
+      out.count++;
+      out.seconds += secs;
+      if (isFinite(rate) && rate > 0) {
+        out.pricedSeconds += secs;
+        out.estimate += secs / 3600 * rate;
+      } else {
+        out.unpricedSeconds += secs;
+      }
+      if (e.timerStart && (!out.oldest || e.timerStart < out.oldest)) out.oldest = e.timerStart;
+    });
+    out.estimate = Math.round(out.estimate * 100) / 100;
+    return out;
+  }
+
+  function sinceDate(portal, iso) {
+    var date = new Date(iso);
+    if (isNaN(date)) return null;
+    return date.toLocaleDateString(portal.store.state.locale || undefined, { month: 'short', day: 'numeric' });
+  }
+
   function section(portal, key, heading) {
     var node = portal.el('section', 'mp-billing-section');
     node.setAttribute('data-mp-section', key);
@@ -95,13 +126,33 @@
     return node;
   }
 
+  function unbilledSection(portal, un) {
+    var node = section(portal, 'unbilled', UNBILLED_HEADING);
+    if (!un.count) {
+      node.appendChild(portal.empty(EMPTY_UNBILLED));
+      return node;
+    }
+    var list = portal.el('div', 'mp-stats');
+    var since = sinceDate(portal, un.oldest);
+    var amount;
+    if (!un.pricedSeconds) amount = 'not priced yet';
+    else amount = 'about ' + portal.money(un.estimate) + (un.unpricedSeconds ? ' (+ ' + portal.hours(un.unpricedSeconds) + ' not priced)' : '');
+    stat(portal, list, 'Hours', portal.hours(un.seconds));
+    stat(portal, list, 'Entries', un.count + (since ? ' · since ' + since : ''));
+    stat(portal, list, 'Estimated amount', amount);
+    node.appendChild(list);
+    return node;
+  }
+
   function render(portal) {
     var f = portal.features();
     if (!f.invoicesEnabled && !f.timeEnabled) return false;
     return load(portal).then(function (data) {
       var card = portal.card({ title: TITLE, icon: portal.icons.receipt, openPath: f.invoicesEnabled ? '/invoices?v=list' : '/time?v=list' });
       var inv = invoiceStats(data.invoices, data.deposits);
+      var un = unbilledStats(data.entries);
       if (f.invoicesEnabled) card.appendChild(invoicesSection(portal, inv));
+      if (f.timeEnabled) card.appendChild(unbilledSection(portal, un));
       return card;
     });
   }

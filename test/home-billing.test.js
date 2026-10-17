@@ -76,3 +76,35 @@ test('hides the invoices section when invoices are off, and the whole card when 
   const none = await start({}, { features: { invoicesEnabled: false, timeEnabled: false } });
   assert.equal(card(none), null);
 });
+
+const UNPRICED = { id: 't-fixed', billable: true, billingStatus: 'UN-BILLED', billingReason: 'PROJECT_FIXED', billingRate: null, unbilledSeconds: 1800, duration: 1800, invoiceId: null, timerStart: '2026-10-15T09:00:00.000Z' };
+const NON_BILLABLE = { id: 't-free', billable: false, billingStatus: 'UN-BILLED', billingReason: 'NON_BILLABLE', billingRate: 100, unbilledSeconds: 7200, duration: 7200, invoiceId: null, timerStart: '2026-10-16T09:00:00.000Z' };
+
+test('sums un-billed hours and prices them at the rate Moxie stamped on each entry', async () => {
+  const t = await start({ '/invoices': [], '/deposits': null, '/timer': [BILLED, UNBILLED] });
+  assert.equal(section(t, 'unbilled').querySelector('.mp-section-title').textContent, 'Not yet invoiced');
+  assert.deepEqual(stats(t, 'unbilled'), { 'Hours': '0:05', 'Entries': '1 · since Oct 17', 'Estimated amount': 'about $8.33' });
+});
+
+test('names un-priced time and leaves non-billable time out', async () => {
+  const t = await start({ '/invoices': [], '/deposits': null, '/timer': [UNBILLED, UNPRICED, NON_BILLABLE] });
+  assert.deepEqual(stats(t, 'unbilled'), { 'Hours': '0:35', 'Entries': '2 · since Oct 15', 'Estimated amount': 'about $8.33 (+ 0:30 not priced)' });
+  const only = await start({ '/invoices': [], '/deposits': null, '/timer': [UNPRICED] });
+  assert.equal(stats(only, 'unbilled')['Estimated amount'], 'not priced yet');
+});
+
+test('falls back to invoiceId when billingStatus is missing', async () => {
+  const legacyOpen = { id: 'l1', billable: true, billingRate: 50, unbilledSeconds: 3600, duration: 3600, invoiceId: null, timerStart: '2026-10-10T09:00:00.000Z' };
+  const legacyBilled = { id: 'l2', billable: true, billingRate: 50, unbilledSeconds: 3600, duration: 3600, invoiceId: 'inv-1', timerStart: '2026-10-10T09:00:00.000Z' };
+  const t = await start({ '/invoices': [], '/deposits': null, '/timer': [legacyOpen, legacyBilled] });
+  assert.equal(stats(t, 'unbilled')['Hours'], '1:00');
+  assert.equal(stats(t, 'unbilled')['Estimated amount'], 'about $50.00');
+});
+
+test('shows the empty line when nothing is un-billed, and no section when time is off', async () => {
+  const t = await start({ '/invoices': [], '/deposits': null, '/timer': [BILLED] });
+  assert.equal(section(t, 'unbilled').querySelector('.mp-empty').textContent, 'Nothing waiting to be invoiced.');
+  assert.equal(section(t, 'unbilled').querySelector('.mp-stat'), null);
+  const off = await start({ '/invoices': [DEPOSIT_INVOICE], '/deposits': null }, { features: { timeEnabled: false } });
+  assert.equal(section(off, 'unbilled'), null);
+});
