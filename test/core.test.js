@@ -605,3 +605,33 @@ test('onDom also fires when a class changes, such as the sidebar collapsing', as
   await tick();
   assert.equal(calls, 1);
 });
+
+test('money formats in the store currency and locale', () => {
+  const t = withPortal();
+  const p = t.portal;
+  assert.equal(p.money(68), '$68.00');
+  assert.equal(p.money(1234.5), '$1,234.50');
+  assert.equal(p.money(0), '$0.00');
+  assert.equal(p.money(-5), '-$5.00');
+  t.store.state.defaultCurrency = 'EUR';
+  assert.equal(p.money(68), '€68.00');
+  t.store.state.defaultCurrency = 'NOT_A_CODE';
+  assert.equal(p.money(68), '$68.00');
+});
+
+test('hours formats seconds as h:mm, rounding to the minute', () => {
+  const p = withPortal().portal;
+  assert.equal(p.hours(300), '0:05');
+  assert.equal(p.hours(1140), '0:19');
+  assert.equal(p.hours(5400), '1:30');
+  assert.equal(p.hours(36000), '10:00');
+  assert.equal(p.hours(29), '0:00');
+  assert.equal(p.hours(31), '0:01');
+  assert.equal(p.hours(0), '0:00');
+  assert.equal(p.hours(null), '0:00');
+});
+
+test('the receipt icon exists', () => {
+  const p = withPortal().portal;
+  assert.match(p.icons.receipt, /<path/);
+});
