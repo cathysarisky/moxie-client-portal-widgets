@@ -43,7 +43,12 @@
     var f = portal.features();
     return Promise.all([
       f.invoicesEnabled ? portal.api('/invoices') : [],
-      f.invoicesEnabled ? portal.api('/deposits').then(null, function () { return null; }) : null,
+      // No deposit account answers 404; anything else is a real failure and drops the card
+      // (the parent logs it), because guessing a zero balance could show a false "Balance due".
+      f.invoicesEnabled ? portal.api('/deposits').then(null, function (err) {
+        if (err && err.message === 'HTTP 404') return null;
+        throw err;
+      }) : null,
       f.timeEnabled ? portal.api('/timer') : []
     ]).then(function (res) {
       return {

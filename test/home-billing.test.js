@@ -20,6 +20,7 @@ const UNBILLED = { id: 't-open', billable: true, billingStatus: 'UN-BILLED', bil
 async function start(responses, opts = {}, settings = {}) {
   const features = Object.assign({ invoicesEnabled: true, timeEnabled: true }, opts.features);
   const t = boot(Object.assign({ html: PAGE, route: '/welcome', responses }, opts, { features }));
+  if (opts.beforeLoad) opts.beforeLoad(t);
   loadSnippet(t, 'home-billing', settings);
   await tick();
   return t;
@@ -151,4 +152,17 @@ test('with invoices off the net comes from time alone and the arrow opens the Ti
   assert.deepEqual(footers(t), ['View time worked']);
   card(t).querySelector('.mp-open').click();
   assert.equal(t.router.currentRoute.path, '/time');
+});
+
+test('a deposits call that fails for any reason other than 404 drops the card rather than guessing', async () => {
+  const fail500 = (t) => {
+    const orig = t.window.fetch;
+    t.window.fetch = (url) => url.endsWith('/deposits')
+      ? Promise.resolve({ ok: false, status: 500, json: () => Promise.resolve({}) })
+      : orig(url);
+  };
+  const t = await start({ '/invoices': [DEPOSIT_INVOICE, HOURS_INVOICE], '/deposits': DEPOSITS, '/timer': [BILLED, UNBILLED] }, { beforeLoad: fail500 });
+  assert.equal(card(t), null);
+  assert.equal(t.warns.length, 1);
+  assert.match(String(t.warns[0][0]), /mp-billing/);
 });
