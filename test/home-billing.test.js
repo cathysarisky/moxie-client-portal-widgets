@@ -166,3 +166,11 @@ test('a deposits call that fails for any reason other than 404 drops the card ra
   assert.equal(t.warns.length, 1);
   assert.match(String(t.warns[0][0]), /mp-billing/);
 });
+
+test('section headings and the net block are left-aligned whatever the portal centres', async () => {
+  const t = await start({ '/invoices': [DEPOSIT_INVOICE], '/deposits': DEPOSITS, '/timer': [UNBILLED] });
+  const css = [...t.document.head.querySelectorAll('style')].map((s) => s.textContent).join('\n');
+  assert.match(css, /#mp-billing \.mp-billing-section \{[^}]*text-align: left/);
+  assert.match(css, /#mp-billing \.mp-section-title \{[^}]*text-align: left/);
+  assert.match(css, /#mp-billing \.mp-net \{[^}]*align-items: flex-start[^}]*text-align: left/);
+});

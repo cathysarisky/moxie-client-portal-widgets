@@ -24,15 +24,15 @@
   var UNPAID = ['SENT', 'PARTIAL'];
 
   var CSS = [
-    '#mp-billing .mp-billing-section { padding: 12px 16px; border-bottom: 1px solid var(--portal-border); }',
+    '#mp-billing .mp-billing-section { padding: 12px 16px; border-bottom: 1px solid var(--portal-border); text-align: left; }',
     '#mp-billing .mp-billing-section:last-of-type { border-bottom: 0; }',
-    '#mp-billing .mp-section-title { margin: 0 0 8px; color: var(--portal-muted); font-size: 12px; font-weight: 600; letter-spacing: .04em; text-transform: uppercase; }',
+    '#mp-billing .mp-section-title { margin: 0 0 8px; color: var(--portal-muted); font-size: 12px; font-weight: 600; letter-spacing: .04em; text-transform: uppercase; text-align: left; }',
     '#mp-billing .mp-stats { display: grid; gap: 6px; }',
     '#mp-billing .mp-stat { display: flex; justify-content: space-between; gap: 12px; font-size: 14px; }',
     '#mp-billing .mp-stat-label { color: var(--portal-muted); }',
     '#mp-billing .mp-stat-value { color: var(--portal-text); font-variant-numeric: tabular-nums; text-align: right; }',
     '#mp-billing .mp-billing-section .mp-empty { padding: 0; }',
-    '#mp-billing .mp-net { display: flex; flex-direction: column; gap: 2px; }',
+    '#mp-billing .mp-net { display: flex; flex-direction: column; align-items: flex-start; gap: 2px; text-align: left; }',
     '#mp-billing .mp-net-value { color: var(--portal-text); font-size: 28px; font-weight: 700; line-height: 1.2; font-variant-numeric: tabular-nums; }',
     '#mp-billing .mp-net-label { color: var(--portal-text); font-size: 14px; font-weight: 600; }',
     '#mp-billing .mp-net-note { color: var(--portal-muted); font-size: 13px; }'
