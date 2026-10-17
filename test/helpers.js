@@ -91,9 +91,23 @@ function boot(opts = {}) {
   return { window, document: window.document, store, router, calls, warns, attach, MoxiePortal: window.MoxiePortal, source };
 }
 
+const SNIPPETS = path.join(__dirname, '..', 'snippets');
+
+// Runs snippets/<name>.js inside a booted window, with its top-level `var` settings replaced.
+function loadSnippet(t, name, settings = {}) {
+  let source = fs.readFileSync(path.join(SNIPPETS, name + '.js'), 'utf8');
+  Object.keys(settings).forEach((key) => {
+    const re = new RegExp('var ' + key + ' = [\\s\\S]*?;(?=\\n)');
+    if (!re.test(source)) throw new Error('no setting ' + key + ' in ' + name);
+    source = source.replace(re, 'var ' + key + ' = ' + JSON.stringify(settings[key]) + ';');
+  });
+  t.window.eval(source);
+  return source;
+}
+
 const tick = (ms = 40) => new Promise((resolve) => setTimeout(resolve, ms));
 
 // Values built inside the jsdom window have that window's prototypes; strip them for deep comparison.
 const plain = (value) => JSON.parse(JSON.stringify(value));
 
-module.exports = { boot, tick, plain };
+module.exports = { boot, loadSnippet, tick, plain };

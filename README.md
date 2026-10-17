@@ -7,6 +7,8 @@ Drop-in customisations for the [Moxie](https://www.withmoxie.com) client portal.
 | `logo` | Hides the workspace logo above the menu, or shows a different image in its place. |
 | `custom-css` | Adds your own style rules, for every client or only for the clients you name. |
 | `nav-tasks-link` | Adds a **Tasks** menu item that opens the client's task board for their first project. |
+| `nav-rename` | Gives built-in menu links a different name and icon, and renames the page heading to match. |
+| `schedule-groups` | Sorts the booking links on **Meetings > Schedule now** into groups by the start of their names. |
 | `home-waiting` | Home card listing the tasks and requests that are waiting on the client. |
 | `home-recent` | Home card showing the latest comment or change on each task. |
 | `home-requests` | Replaces the Home Requests card with every open ticket for the client. |
@@ -156,6 +158,42 @@ Adds a **Tasks** item right after **Projects** in the left menu. It opens the ta
 |---|---|---|
 | `TASKS_LABEL` | `'Tasks'` | Menu text and tooltip |
 
+### nav-rename
+
+Renames Moxie's built-in left-menu links and swaps their icons, for example **Meetings** becomes **Schedule time** with a calendar. The page heading at the top of that section changes to match, while its tabs ("Schedule now", "Booked meetings") keep their names. The new name is also used for the tooltip shown while the menu is collapsed.
+
+| Setting | Default | Meaning |
+|---|---|---|
+| `RENAMES` | `{ Meetings: { label: 'Schedule time', icon: 'calendar' } }` | One entry per built-in link, keyed by the name Moxie shows. `label` is the new text; `icon` is an icon name (`calendar`, `tasks`, `folder`, `ticket`, `history`, `listChecks`) or your own SVG markup such as `'<circle cx="12" cy="12" r="9"/>'`, drawn in the portal's stroke style. Leave `label` or `icon` out to keep the portal's own; an unknown icon name also keeps the portal's icon |
+
+```js
+var RENAMES = {
+  Meetings: { label: 'Schedule time', icon: 'calendar' },
+  Requests: { label: 'Help desk' }
+};
+```
+
+### schedule-groups
+
+On **Meetings > Schedule now**, replaces the single alphabetical grid of booking links with one group per name prefix. Name your booking links in Moxie with a shared start, such as `Developer time: 1 hour` and `Developer time: 2 hours`, list those starts in `GROUPS`, and each group gets a heading with the links under it A to Z, the shared start removed. Links whose names match nothing are shown last under `OTHER_LABEL`. If no link matches any group, the page is left as Moxie made it.
+
+```js
+var GROUPS = [
+  { starts: 'Developer time:', text: "Asynchronous work on your site. Leave a note when booking if you'd like a kick-off call." },
+  { starts: 'Meeting:', text: 'Synchronous calls. Meeting time is billed, so consider a task or ticket for simple requests.' },
+  { starts: 'Retainer:', text: 'Booked against your retainer balance.', onlyFor: { ClientType: 'Retainer' } },
+  { starts: 'Prepaid:', notFor: { ClientType: 'Retainer' } },
+  'Workshop:'
+];
+```
+
+Texts sit inside double quotes when they contain an apostrophe, as in the first line above. In this example a client whose `ClientType` field is not `Retainer` never sees the Retainer group or any link whose name starts with `Retainer:`, and a retainer client never sees the Prepaid group, so one set of booking links can serve every kind of client. `notFor` with several fields hides the group only from clients who match all of them. Links in Moxie still need **Show in portal** turned on; this snippet only hides, it cannot show a link Moxie keeps off the portal.
+
+| Setting | Default | Meaning |
+|---|---|---|
+| `GROUPS` | two groups, `Developer time:` and `Meeting:`, each with an explanation | The groups in display order. Each is `{ starts: 'Developer time:', text: '...', onlyFor: { ... } }`: `starts` is how the link names begin, `text` is an optional explanation shown under the heading, `onlyFor` optionally limits the group to clients whose custom fields match, in the same form as the snippet's `ONLY_FOR`, and `notFor` hides it from clients whose fields match. A client who may not see a group sees neither the group nor its links. A plain string such as `'Meeting:'` is a group with no text and no filter. The heading is `starts` without its trailing `:` or `-`. Matching ignores case |
+| `OTHER_LABEL` | `'Other'` | Heading for links that match no group; `''` shows them last without a heading |
+
 ### home-waiting
 
 Lists open tickets whose status is in the parent's `TICKET_WAITING_STATUSES`, newest activity first, each with its ticket number, status and status colour, followed by tasks whose status is in `WAITING_STATUSES`, soonest due first, each with its status colour, project and due date. The count in the header covers both. Clicking a ticket opens it on the Requests page. Clicking a task opens the task side panel, and the cards refresh when it closes. A footer links to each project's task board. Tasks are left out when projects are turned off for the client and tickets when tickets are; the card is hidden when both are off.
@@ -299,7 +337,7 @@ The bundled files stick to ES5 (`var`, `function`) so they paste anywhere withou
 | `portal.empty(text)` | Muted "nothing here" text |
 | `portal.footer(text, onClick)` | Full-width link at the bottom of a card |
 | `portal.el(tag, className, text)`, `portal.svg(paths, size)`, `portal.button(className, onClick)` | Element builders |
-| `portal.icons` | Lucide icon paths: `tasks`, `folder`, `chevron`, `arrow`, `ticket`, `history`, `listChecks` |
+| `portal.icons` | Lucide icon paths: `tasks`, `folder`, `chevron`, `arrow`, `ticket`, `history`, `listChecks`, `calendar` |
 | `portal.timeAgo(ms)`, `portal.formatDue(date)`, `portal.norm(s)` | Formatting helpers |
 
 **Home cards**
@@ -313,10 +351,10 @@ The bundled files stick to ES5 (`var`, `function`) so they paste anywhere withou
 
 ```sh
 npm install
-npm test        # syntax-checks every file, then runs the parent's jsdom tests
+npm test        # syntax-checks every file, then runs the jsdom tests
 ```
 
-Tests cover the parent script. Snippets are checked by hand in the portal. To assemble everything into one file for your own pasting, concatenate in the right order: `cat core/moxie-portal.js snippets/*.js > portal.js`.
+Tests cover the parent script and, in `test/<snippet>.test.js`, the `nav-rename` and `schedule-groups` snippets; the other snippets are checked by hand in the portal. To assemble everything into one file for your own pasting, concatenate in the right order: `cat core/moxie-portal.js snippets/*.js > portal.js`.
 
 ## License
 
