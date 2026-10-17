@@ -241,6 +241,25 @@ The client's active projects in alphabetical order, hiding Moxie's own "Projects
 
 ![The Projects card listing two projects, each with a count of tasks waiting on the client](docs/screenshots/projects-rev.jpg)
 
+### home-billing
+
+Where the client stands with you, in three parts. "Invoices" shows the same lifetime totals as Moxie's Invoices > Reports tab (total invoiced, total paid, how many invoices are unpaid and for how much, and the deposit figures when the client has a deposit). "Not yet invoiced" adds up the time entries Moxie has not billed yet and prices them at the rate Moxie stamped on each entry, so the estimate matches the next invoice; time Moxie gives no rate to, such as work on a fixed-price project, is shown as hours and named as "not priced" rather than guessed. "Where you stand" nets it out: deposit balance minus unpaid invoices minus the estimate, shown as a credit remaining, all settled, or a balance due, with a one-line explanation. Footers open the Invoices and Time pages. Each part is skipped when its feature is off for the client, and the card is hidden when both invoices and time are off.
+
+| Setting | Default |
+|---|---|
+| `TITLE` | `'Billing'` |
+| `INVOICES_HEADING` | `'Invoices'` |
+| `UNBILLED_HEADING` | `'Not yet invoiced'` |
+| `NET_HEADING` | `'Where you stand'` |
+| `CREDIT_LABEL` | `'Credit remaining'` |
+| `DUE_LABEL` | `'Balance due'` |
+| `SETTLED_LABEL` | `'All settled'` |
+| `EMPTY_UNBILLED` | `'Nothing waiting to be invoiced.'` |
+| `INVOICES_LINK` | `'View invoices'` |
+| `TIME_LINK` | `'View time worked'` |
+
+Add `'billing'` to the parent's `HOME_CARDS` to choose which row it sits in; left out of that list, it appears after the listed cards in a row of its own.
+
 **How Home cards are placed.** The cards form a block above Moxie's own dashboard, in the rows set by `HOME_CARDS`. Moxie's dashboard stays below with whatever else it holds, minus the built-in cards that Requests and Projects stand in for. A card appears only once its data has loaded, so nothing shows half-filled, and the cards are rendered again each time the viewer arrives on Home.
 
 ## Buy me a tea?

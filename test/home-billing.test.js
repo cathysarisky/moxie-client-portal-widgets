@@ -108,3 +108,47 @@ test('shows the empty line when nothing is un-billed, and no section when time i
   const off = await start({ '/invoices': [DEPOSIT_INVOICE], '/deposits': null }, { features: { timeEnabled: false } });
   assert.equal(section(off, 'unbilled'), null);
 });
+
+const netOf = (t) => ({
+  value: section(t, 'net').querySelector('.mp-net-value').textContent,
+  label: section(t, 'net').querySelector('.mp-net-label').textContent,
+  note: section(t, 'net').querySelector('.mp-net-note').textContent
+});
+const footers = (t) => [...card(t).querySelectorAll('.mp-footer span')].map((s) => s.textContent);
+
+test('credit remaining for the live sample', async () => {
+  const t = await start({ '/invoices': [DEPOSIT_INVOICE, HOURS_INVOICE], '/deposits': DEPOSITS, '/timer': [BILLED, UNBILLED] });
+  assert.deepEqual(netOf(t), { value: '$59.67', label: 'Credit remaining', note: 'Deposit balance $68.00 − unbilled work about $8.33 (0:05)' });
+  assert.deepEqual(footers(t), ['View invoices', 'View time worked']);
+  assert.equal(section(t, 'net').querySelector('.mp-section-title').textContent, 'Where you stand');
+});
+
+test('balance due when unpaid invoices and unbilled work exceed the deposit', async () => {
+  const t = await start({ '/invoices': [SENT_INVOICE, PARTIAL_INVOICE], '/deposits': DEPOSITS, '/timer': [UNBILLED, UNPRICED] });
+  assert.deepEqual(netOf(t), { value: '$210.33', label: 'Balance due', note: 'Deposit balance $68.00 − unpaid invoices $270.00 − unbilled work about $8.33 (0:05) · 0:30 of unbilled time not included' });
+});
+
+test('balance due with no deposit reads as a sum', async () => {
+  const t = await start({ '/invoices': [SENT_INVOICE], '/deposits': null, '/timer': [UNBILLED] });
+  assert.deepEqual(netOf(t), { value: '$128.33', label: 'Balance due', note: 'Unpaid invoices $120.00 + unbilled work about $8.33 (0:05)' });
+});
+
+test('all settled when nothing is outstanding', async () => {
+  const t = await start({ '/invoices': [DEPOSIT_INVOICE], '/deposits': null, '/timer': [BILLED] });
+  assert.deepEqual(netOf(t), { value: '$0.00', label: 'All settled', note: 'Nothing outstanding.' });
+});
+
+test('net and estimate agree to the cent', async () => {
+  const tiny = (id) => ({ id, billable: true, billingStatus: 'UN-BILLED', billingRate: 100, unbilledSeconds: 1, duration: 1, invoiceId: null, timerStart: '2026-10-17T10:00:00.000Z' });
+  const t = await start({ '/invoices': [], '/deposits': { liabilities: 10, credits: 0, balance: 10 }, '/timer': [tiny('a'), tiny('b'), tiny('c')] });
+  assert.equal(stats(t, 'unbilled')['Estimated amount'], 'about $0.08');
+  assert.deepEqual(netOf(t), { value: '$9.92', label: 'Credit remaining', note: 'Deposit balance $10.00 − unbilled work about $0.08 (0:00)' });
+});
+
+test('with invoices off the net comes from time alone and the arrow opens the Time page', async () => {
+  const t = await start({ '/timer': [UNBILLED] }, { features: { invoicesEnabled: false } });
+  assert.deepEqual(netOf(t), { value: '$8.33', label: 'Balance due', note: 'Unbilled work about $8.33 (0:05)' });
+  assert.deepEqual(footers(t), ['View time worked']);
+  card(t).querySelector('.mp-open').click();
+  assert.equal(t.router.currentRoute.path, '/time');
+});

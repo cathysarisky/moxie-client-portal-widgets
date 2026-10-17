@@ -31,7 +31,11 @@
     '#mp-billing .mp-stat { display: flex; justify-content: space-between; gap: 12px; font-size: 14px; }',
     '#mp-billing .mp-stat-label { color: var(--portal-muted); }',
     '#mp-billing .mp-stat-value { color: var(--portal-text); font-variant-numeric: tabular-nums; text-align: right; }',
-    '#mp-billing .mp-billing-section .mp-empty { padding: 0; }'
+    '#mp-billing .mp-billing-section .mp-empty { padding: 0; }',
+    '#mp-billing .mp-net { display: flex; flex-direction: column; gap: 2px; }',
+    '#mp-billing .mp-net-value { color: var(--portal-text); font-size: 28px; font-weight: 700; line-height: 1.2; font-variant-numeric: tabular-nums; }',
+    '#mp-billing .mp-net-label { color: var(--portal-text); font-size: 14px; font-weight: 600; }',
+    '#mp-billing .mp-net-note { color: var(--portal-muted); font-size: 13px; }'
   ].join('\n');
 
   // Fetches what the card needs; empty when the matching feature is off for the client.
@@ -144,6 +148,37 @@
     return node;
   }
 
+  // The client's position: deposit balance minus unpaid invoices minus priced unbilled work.
+  function net(portal, inv, un) {
+    var depositBalance = inv.deposits ? Number(inv.deposits.balance) || 0 : 0;
+    var value = depositBalance - inv.unpaidDue - un.estimate;
+    if (Math.abs(value) < 0.005) value = 0;
+    var parts = [];
+    if (inv.unpaidDue > 0) parts.push('unpaid invoices ' + portal.money(inv.unpaidDue));
+    if (un.estimate > 0) parts.push('unbilled work about ' + portal.money(un.estimate) + ' (' + portal.hours(un.pricedSeconds) + ')');
+    var note;
+    if (depositBalance > 0) {
+      note = 'Deposit balance ' + portal.money(depositBalance) + parts.map(function (p) { return ' − ' + p; }).join('');
+    } else if (parts.length) {
+      note = parts.join(' + ');
+      note = note.charAt(0).toUpperCase() + note.slice(1);
+    } else {
+      note = 'Nothing outstanding.';
+    }
+    if (un.unpricedSeconds > 0) note += ' · ' + portal.hours(un.unpricedSeconds) + ' of unbilled time not included';
+    return { value: value, label: value > 0 ? CREDIT_LABEL : value < 0 ? DUE_LABEL : SETTLED_LABEL, note: note };
+  }
+
+  function netSection(portal, result) {
+    var node = section(portal, 'net', NET_HEADING);
+    var box = portal.el('div', 'mp-net');
+    box.appendChild(portal.el('div', 'mp-net-value', portal.money(Math.abs(result.value))));
+    box.appendChild(portal.el('div', 'mp-net-label', result.label));
+    box.appendChild(portal.el('div', 'mp-net-note', result.note));
+    node.appendChild(box);
+    return node;
+  }
+
   function render(portal) {
     var f = portal.features();
     if (!f.invoicesEnabled && !f.timeEnabled) return false;
@@ -153,6 +188,9 @@
       var un = unbilledStats(data.entries);
       if (f.invoicesEnabled) card.appendChild(invoicesSection(portal, inv));
       if (f.timeEnabled) card.appendChild(unbilledSection(portal, un));
+      card.appendChild(netSection(portal, net(portal, inv, un)));
+      if (f.invoicesEnabled) card.appendChild(portal.footer(INVOICES_LINK, function () { portal.go('/invoices?v=list'); }));
+      if (f.timeEnabled) card.appendChild(portal.footer(TIME_LINK, function () { portal.go('/time?v=list'); }));
       return card;
     });
   }
