@@ -6,10 +6,12 @@
   "author": "Cathy Sarisky, Spectral Web Services",
   "license": "MIT",
   "scripts": {
-    "pretest": "for f in core/*.js snippets/*.js; do [ -e \"$f\" ] || continue; node --check \"$f\" || exit 1; done",
-    "test": "node --test test/*.test.js"
+    "pretest": "for f in core/*.js snippets/*.js tool/*.js tool/lib/*.js tool/src/*.js; do [ -e \"$f\" ] || continue; node --check \"$f\" || exit 1; done",
+    "test": "node --test test/*.test.js",
+    "build:tool": "node tool/build.js"
   },
   "devDependencies": {
+    "acorn": "^8.19.0",
     "jsdom": "^30.1.3"
   }
 }
