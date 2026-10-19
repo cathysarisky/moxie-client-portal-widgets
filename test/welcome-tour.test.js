@@ -92,3 +92,37 @@ test('switching to a client that does not match removes the modal and the replay
   assert.equal(modal(t), null);
   assert.equal(t.window.MoxiePortalTour, undefined);
 });
+
+test('waits for the client record before judging a first visit', async () => {
+  const t = start({ customValues: ONBOARDED, beforeLoad: (x) => { x.ctx = x.store.state.clientPortalContext; x.store.state.clientPortalContext = {}; } });
+  assert.equal(modal(t), null);
+  assert.equal(t.sent.length, 0);
+  t.store.state.clientPortalContext = t.ctx;
+  await tick(250);
+  assert.equal(modal(t), null);
+  assert.deepEqual(t.sent.map((e) => e.event), ['login']);
+});
+
+test('SHOW_TOUR false offers no replay hook to other snippets', () => {
+  const t = start({}, { SHOW_TOUR: false });
+  assert.equal(t.window.MoxiePortalTour, undefined);
+});
+
+test('a client switch while the modal is open does not count as done', async () => {
+  const t = start();
+  let fired = false;
+  t.window.addEventListener('mp:tour-done', () => { fired = true; });
+  t.store.state.clientPortalContext.client.customValues = [{ mappingKey: 'ClientType', value: 'OTHER' }];
+  t.store.notify();
+  await tick();
+  assert.equal(modal(t), null);
+  assert.equal(t.window.localStorage.getItem('mp-tour-done:client-1'), null);
+  assert.equal(fired, false);
+});
+
+test('closing restores the page overflow it found', () => {
+  const t = start({ beforeLoad: (x) => { x.document.documentElement.style.overflow = 'auto'; } });
+  assert.equal(t.document.documentElement.style.overflow, 'hidden');
+  t.document.querySelector('.mp-tour-btn').click();
+  assert.equal(t.document.documentElement.style.overflow, 'auto');
+});

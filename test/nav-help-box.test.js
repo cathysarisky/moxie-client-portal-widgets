@@ -9,11 +9,14 @@ function link(label) {
 const SIDEBAR = '<aside id="left-nav"><div class="rail-navigation"><div class="navigation-group">' +
   link('Home') + link('Projects') + '</div></div></aside>';
 
+// An onboarded client, so a pasted welcome-tour offers its replay hook without opening.
+const ONBOARDED = [{ mappingKey: 'ClientType', value: 'TEST' }, { mappingKey: 'AccessedPortal', value: 'Yes' }];
+
 function start(opts = {}, settings = {}) {
-  const t = boot(Object.assign({ html: SIDEBAR, route: '/welcome' }, opts));
-  if (opts.withTour) loadSnippet(t, 'welcome-tour', { SHOW_TOUR: false });
+  const t = boot(Object.assign({ html: SIDEBAR, route: '/welcome', customValues: ONBOARDED }, opts));
+  if (opts.withTour) loadSnippet(t, 'welcome-tour');
   loadSnippet(t, 'nav-help-box', settings);
-  if (opts.tourAfter) loadSnippet(t, 'welcome-tour', { SHOW_TOUR: false });
+  if (opts.tourAfter) loadSnippet(t, 'welcome-tour');
   return t;
 }
 const box = (t) => t.document.querySelector('.mp-help');
@@ -64,4 +67,11 @@ test('the replay link also appears when welcome-tour is pasted below the box', a
   const t = start({ tourAfter: true });
   await tick();
   assert.equal(t.document.querySelectorAll('.mp-help-link').length, 2);
+});
+
+test('stays out of the menu when the help desk is off and the link points there', () => {
+  const t = start({ features: { ticketsEnabled: false } });
+  assert.equal(box(t), null);
+  const elsewhere = start({ features: { ticketsEnabled: false } }, { LINK_PATH: '/meetings/schedulers' });
+  assert.ok(box(elsewhere));
 });

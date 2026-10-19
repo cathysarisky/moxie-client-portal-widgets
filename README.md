@@ -185,7 +185,7 @@ var RENAMES = {
 
 ### nav-help-box
 
-A small frosted block under the left-menu links: a title, a line about how quickly you reply, and a link to the help desk. When the `welcome-tour` snippet is pasted too, it adds a link that replays the tour. The box hides while the menu is collapsed to icons. It is styled for a dark menu; on a light one, set `LINK_COLOR` and add your own colours with `custom-css`.
+A small frosted block under the left-menu links: a title, a line about how quickly you reply, and a link to the help desk. When the `welcome-tour` snippet is pasted too (with its modal on), it adds a link that replays the tour. The box hides while the menu is collapsed to icons, and stays out of the menu altogether when `LINK_PATH` points at the help desk and the client's portal has tickets turned off. It is styled for a dark menu; on a light one, set `LINK_COLOR` and add your own colours with `custom-css`.
 
 | Setting | Default | Meaning |
 |---|---|---|
@@ -223,7 +223,7 @@ On a client's first visit, opens a welcome modal with a title, an optional video
 
 With `WEBHOOK_URL` set, it also POSTs a small JSON event once per browser session: `first_login` on the first visit, `login` after that. The event carries `event`, `clientId`, `contactId`, `firstName`, `lastName`, `email`, `when` and `page`. In Make or Zapier that is two steps: a webhook trigger, then Moxie "Update client" setting the custom field to "Yes". You can also log `when` to a "last login" field.
 
-Other snippets can reopen the modal with `window.MoxiePortalTour.open()` (`nav-help-box` does), and can listen for the `mp:tour-done` window event, fired when the client closes the modal.
+Other snippets can reopen the modal with `window.MoxiePortalTour.open()` (`nav-help-box` does; the hook exists only while `SHOW_TOUR` is on), and can listen for the `mp:tour-done` window event, fired when the client closes the modal.
 
 | Setting | Default | Meaning |
 |---|---|---|
@@ -236,11 +236,11 @@ Other snippets can reopen the modal with `window.MoxiePortalTour.open()` (`nav-h
 | `TEXT` | `'A quick look at where everything lives: ...'` | |
 | `BUTTON` | `'Got it, let\'s go'` | |
 | `SKIP` | `'Skip for now'` | |
-| `SHOW_TOUR` | `true` | `false` sends the webhook events but never shows the modal |
+| `SHOW_TOUR` | `true` | `false` sends the webhook events but never shows the modal, and offers no replay hook |
 
 ### home-greeting
 
-A full-width band at the top of Home, in the left menu's colour. On the left: "Hi {first name}, here's where things stand.", then a sentence counting what's waiting on the client ("3 items need something from you: 2 to approve and 1 request reply."), two buttons, and a status line with the number of active projects and overdue items. On the right is a "Next up" panel. It shows the next booked meeting, or the soonest-due waiting task when nothing is booked, then one progress bar per active project. Retainer projects show hours used this month against the client's cap; other projects show time until their due date, or tasks done when they have no due date.
+A full-width band at the top of Home, in the left menu's colour. On the left: "Hi {first name}, here's where things stand.", then a sentence counting what's waiting on the client ("3 items need something from you: 2 to approve and 1 request reply."), two buttons, and a status line with the number of active projects and overdue items. On the right is a "Next up" panel. It shows the next booked meeting, or the soonest-due waiting task when nothing is booked, then one progress bar per active project (the ones the portal itself lists: not paused, cancelled or hidden from the portal). Retainer projects share one bar of hours used this month against the client's cap; other projects show the days until their due date, or tasks done when they have no due date.
 
 Put `'greeting'` first in the parent's `HOME_CARDS` so the band opens the page.
 
@@ -255,7 +255,7 @@ Put `'greeting'` first in the parent's `HOME_CARDS` so the band opens the page.
 | `VERB_DEFAULT` | `'to look at'` | For waiting statuses not in `VERBS` |
 | `TICKET_NOUN` | `['request reply', 'request replies']` | Singular and plural for waiting tickets |
 | `RETAINER_FIELD` | `'RetainerHours'` | Mapping key of a client custom field holding a monthly hours cap |
-| `RETAINER_TYPES` | `[]` | Project type names that get the hours bar when the client has a cap |
+| `RETAINER_TYPES` | `[]` | Project type names counted as retainers. With a cap set, their projects share one hours bar (named after the project when there is only one) |
 | `HIDE_HEADING` / `HIDE_WELCOME` | `false` | Hide the portal's own Home heading and welcome banner |
 | `BAND_BACKGROUND`, `BAND_TEXT`, `ACCENT`, `ACCENT_TEXT` | the menu colour, white, `--brand-accent`, near-black | Colours of the band, its text, and the buttons and bars |
 

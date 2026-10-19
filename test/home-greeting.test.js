@@ -3,6 +3,9 @@ const test = require('node:test');
 const assert = require('node:assert/strict');
 const { boot, loadSnippet, tick } = require('./helpers');
 
+// Date maths below depend on the zone; New York has a DST change in the test's window.
+process.env.TZ = 'America/New_York';
+
 const PAGE = '<div class="welcome-page"><header class="welcome-heading"><h1>Hello</h1></header><div class="action-dashboard"></div></div>';
 
 const PROJECT = { id: 'p1', name: 'Website', active: true, portalAccess: 'Full access', lifecycleStatus: 'ACTIVE', projectTypeId: 'pt1' };
@@ -24,11 +27,20 @@ function responses(extra) {
 async function start(opts = {}, settings = {}) {
   const t = boot(Object.assign({ html: PAGE, route: '/welcome', responses: responses() }, opts));
   t.MoxiePortal.ready((portal) => { t.portal = portal; });
+  if (opts.beforeLoad) opts.beforeLoad(t);
   loadSnippet(t, 'home-greeting', settings);
   await tick();
   return t;
 }
 const band = (t) => t.document.getElementById('mp-greeting');
+// Pins "now" inside the portal window; dates built from parts or strings still work.
+function freeze(t, iso) {
+  const Real = t.window.Date;
+  const now = new Real(iso).getTime();
+  class Frozen extends Real { constructor(...a) { super(...(a.length ? a : [now])); } static now() { return now; } }
+  t.window.Date = Frozen;
+}
+const localDay = (d) => [d.getFullYear(), String(d.getMonth() + 1).padStart(2, '0'), String(d.getDate()).padStart(2, '0')].join('-');
 const text = (t, sel) => band(t).querySelector(sel).textContent;
 
 test('greets the viewer and counts what is waiting, by verb', async () => {
@@ -101,4 +113,52 @@ test('tasks and projects without a due date are never overdue', async () => {
   const t = await start();
   assert.match(text(t, '.mp-g-status'), /nothing overdue/);
   assert.doesNotMatch(band(t).querySelector('.mp-g-bar-head b').textContent, /over/);
+});
+
+test('projects the portal hides (paused, no portal access) are not counted or charted', async () => {
+  const hidden = { id: 'p2', name: 'Old site', active: true, portalAccess: 'None', lifecycleStatus: 'PAUSED', projectTypeId: 'pt1', dueDate: '2026-12-31' };
+  const t = await start({ responses: responses({ '/projects': [PROJECT, hidden] }) });
+  assert.match(text(t, '.mp-g-status'), /^1 project active/);
+  assert.equal(band(t).querySelectorAll('.mp-g-bar').length, 1);
+});
+
+test('a due date with a time part counts as its calendar day, like the parent', async () => {
+  const today = new Date();
+  const dueToday = Object.assign({}, APPROVE, { dueDate: localDay(today) + 'T00:00:00.000Z' });
+  const t = await start({ responses: responses({ '/deliverables?projectTypeId=pt1': [dueToday, DONE] }) });
+  assert.match(text(t, '.mp-g-status'), /nothing overdue/);
+  assert.equal(text(t, '.mp-g-next span'), 'Due ' + today.toLocaleString('en-US', { weekday: 'short', month: 'short', day: 'numeric' }) + ' · Website');
+});
+
+test('retainer hours are charted once for the client, not once per project', async () => {
+  const second = Object.assign({}, PROJECT, { id: 'p2', name: 'Support' });
+  const t = await start({
+    customValues: [{ mappingKey: 'ClientType', value: 'TEST' }, { mappingKey: 'RetainerHours', value: '10' }],
+    features: { timeEnabled: true },
+    responses: responses({ '/projects': [PROJECT, second], '/timer': [{ timerStart: new Date().toISOString(), duration: 7200 }] })
+  }, { RETAINER_TYPES: ['build'] });
+  const bars = band(t).querySelectorAll('.mp-g-bar');
+  assert.equal(bars.length, 1);
+  assert.equal(bars[0].querySelector('.mp-g-bar-head span').textContent, 'Retainer');
+  assert.equal(bars[0].querySelector('.mp-g-bar-head b').textContent, '2 of 10 h');
+});
+
+test('days left are counted in calendar days, even across a DST change', async () => {
+  const due = Object.assign({}, PROJECT, { startDate: '2026-10-01', dueDate: '2026-11-02' });
+  const t = await start({ beforeLoad: (x) => freeze(x, '2026-11-01T17:00:00Z'), responses: responses({ '/projects': [due] }) });
+  assert.equal(band(t).querySelector('.mp-g-bar-head b').textContent, '1 day left');
+});
+
+test('the eyebrow names the Monday of the current week', async () => {
+  const t = await start({ beforeLoad: (x) => freeze(x, '2026-10-22T16:00:00Z') });
+  assert.equal(text(t, '.mp-g-eyebrow'), 'Week of Oct 19');
+});
+
+test('time entries are only fetched when a project type is marked as retainer', async () => {
+  const t = await start({
+    customValues: [{ mappingKey: 'ClientType', value: 'TEST' }, { mappingKey: 'RetainerHours', value: '10' }],
+    features: { timeEnabled: true },
+    responses: responses({ '/timer': [] })
+  });
+  assert.equal(t.calls.some((u) => u.endsWith('/timer')), false);
 });

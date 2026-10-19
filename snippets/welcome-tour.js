@@ -8,8 +8,9 @@
  * The automation side is two steps: Webhook, then Moxie "Update client" setting the field
  * named in ONBOARDED_FIELD to "Yes". The portal reads custom fields at sign-in, so the flag
  * takes effect on the client's next visit.
- * Other snippets can reopen the modal with window.MoxiePortalTour.open(), and can listen for
- * the "mp:tour-done" window event, fired when the client closes it.
+ * Other snippets can reopen the modal with window.MoxiePortalTour.open() (present while
+ * SHOW_TOUR is on), and can listen for the "mp:tour-done" window event, fired when the client
+ * closes it.
  * Paste below the MoxiePortal parent script. */
 (function () {
   // Webhook that receives the login events, e.g. 'https://hook.us1.make.com/xxxxxxxx'.
@@ -60,7 +61,6 @@
     portal.style(CSS);
     var clientId = portal.clientId();
     var user = portal.user();
-    var onboarded = portal.norm(portal.clientValues()[ONBOARDED_FIELD]) === 'yes' || storageGet('mp-tour-seen:' + clientId) === '1';
     var sessionKey = 'mp-login-sent:' + clientId;
 
     function send(event) {
@@ -87,9 +87,14 @@
       try { window.dispatchEvent(new CustomEvent('mp:tour-done', { detail: { clientId: clientId } })); } catch (e) {}
     }
 
-    function closeTour(backdrop) {
+    // The page's own overflow, put back when the modal goes.
+    var pageOverflow = '';
+    function removeTour(backdrop) {
       backdrop.remove();
-      document.documentElement.style.overflow = '';
+      document.documentElement.style.overflow = pageOverflow;
+    }
+    function closeTour(backdrop) {
+      removeTour(backdrop);
       markDone();
     }
 
@@ -134,6 +139,7 @@
       backdrop.appendChild(modal);
       backdrop.addEventListener('click', function (e) { if (e.target === backdrop) closeTour(backdrop); });
       document.body.appendChild(backdrop);
+      pageOverflow = document.documentElement.style.overflow;
       document.documentElement.style.overflow = 'hidden';
       ok.focus();
     }
@@ -145,10 +151,22 @@
     document.addEventListener('keydown', onKey);
 
     // Lets other snippets (such as nav-help-box) replay the tour.
-    window.MoxiePortalTour = { open: openTour };
+    if (SHOW_TOUR) window.MoxiePortalTour = { open: openTour };
 
-    if (!sessionGet(sessionKey)) {
+    // The portal can know the client id before the client record (and its custom fields) has
+    // loaded. Judged against an empty record, every visit would look like the first, so wait
+    // for the record (briefly) before deciding.
+    var waiting = null;
+    (function whenClientLoaded(tries) {
+      var ctx = portal.store.state.clientPortalContext;
+      if ((ctx && ctx.client) || tries >= 100) return decide();
+      waiting = setTimeout(function () { whenClientLoaded(tries + 1); }, 100);
+    })(0);
+
+    function decide() {
+      if (sessionGet(sessionKey)) return;
       sessionSet(sessionKey, '1');
+      var onboarded = portal.norm(portal.clientValues()[ONBOARDED_FIELD]) === 'yes' || storageGet('mp-tour-seen:' + clientId) === '1';
       if (!onboarded) {
         send('first_login');
         storageSet('mp-tour-seen:' + clientId, '1');
@@ -158,10 +176,12 @@
       }
     }
 
+    // A client switch takes the modal away without counting as the client having seen it.
     return function () {
+      clearTimeout(waiting);
       document.removeEventListener('keydown', onKey);
       var b = document.querySelector('.mp-tour-backdrop');
-      if (b) closeTour(b);
+      if (b) removeTour(b);
       if (window.MoxiePortalTour && window.MoxiePortalTour.open === openTour) delete window.MoxiePortalTour;
     };
   }, { onlyFor: ONLY_FOR });

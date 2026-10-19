@@ -94,11 +94,13 @@
     return plural(total, 'item needs', 'items need') + ' something from you: ' + list + '.';
   }
 
-  // A date-only string ("2026-10-31") is a local calendar day, not midnight UTC. No value is
-  // no date (new Date(null) would be 1970, which reads as long overdue).
+  // A date is its calendar day: "2026-10-31" and "2026-10-31T00:00:00.000Z" both mean Oct 31
+  // (the same prefix match as the parent's formatDue; parsing the latter as UTC would put it on
+  // Oct 30 west of Greenwich). No value is no date (new Date(null) would be 1970, which reads
+  // as long overdue).
   function toDate(value) {
     if (!value) return null;
-    var m = typeof value === 'string' && /^(\d{4})-(\d{2})-(\d{2})$/.exec(value);
+    var m = typeof value === 'string' && /^(\d{4})-(\d{2})-(\d{2})/.exec(value);
     var d = m ? new Date(+m[1], +m[2] - 1, +m[3]) : new Date(value);
     return isNaN(d) ? null : d;
   }
@@ -136,6 +138,13 @@
       if (when >= start) secs += Number(e.duration) || 0;
     });
     return Math.round(secs / 360) / 10;
+  }
+
+  function daysBetween(from, to) { return Math.round((to - from) / 86400000); }
+  function mondayOf(date) {
+    var monday = new Date(date);
+    monday.setDate(date.getDate() - (date.getDay() + 6) % 7);
+    return monday;
   }
 
   function isDone(item) { return !!(item.task.completed || (item.status && item.status.complete)); }
@@ -177,11 +186,11 @@
           f.projectsEnabled ? portal.data.projects() : [],
           f.projectsEnabled ? portal.data.tasks() : [],
           f.projectsEnabled ? portal.data.projectTypes() : [],
-          (f.timeEnabled && cap > 0) ? portal.api('/timer').then(null, function () { return []; }) : [],
+          (f.timeEnabled && cap > 0 && RETAINER_TYPES.length) ? portal.api('/timer').then(null, function () { return []; }) : [],
           f.meetingsEnabled === false ? null : nextMeeting(portal)
         ]).then(function (res) {
           var waiting = res[0], tickets = res[1];
-          var projects = res[2].filter(function (p) { return p.active; });
+          var projects = res[2].filter(portal.tasks.visible);
           var allTasks = res[3];
           var typeName = {};
           res[4].forEach(function (t) { typeName[t.id] = t.name; });
@@ -197,7 +206,7 @@
           // Left column
           var left = portal.el('div', 'mp-g-left');
           var top = portal.el('div', 'mp-g-top');
-          top.appendChild(portal.el('p', 'mp-g-eyebrow', 'Week of ' + fmtDate(portal, new Date())));
+          top.appendChild(portal.el('p', 'mp-g-eyebrow', 'Week of ' + fmtDate(portal, mondayOf(today))));
           top.appendChild(portal.el('h2', null, (total ? HEADLINE : EMPTY_HEADLINE).replace('{name}', name)));
           top.appendChild(portal.el('p', 'mp-g-text', total ? sentence(portal, waiting, tickets) : EMPTY_TEXT));
           var buttons = portal.el('div', 'mp-g-buttons');
@@ -241,22 +250,29 @@
           }
           panel.appendChild(next);
 
+          // The cap is per client and the time entries are the client's, so retainer projects
+          // share one hours bar.
           var retainerTypes = RETAINER_TYPES.map(portal.norm);
+          var retainers = cap > 0 ? projects.filter(function (p) {
+            return retainerTypes.indexOf(portal.norm(typeName[p.projectTypeId] || '')) !== -1;
+          }) : [];
+          if (retainers.length) {
+            var used = hoursThisMonth(res[5]);
+            var reset = new Date(today.getFullYear(), today.getMonth() + 1, 1);
+            var label = retainers.length === 1 ? retainers[0].name + ' · retainer' : 'Retainer';
+            bar(portal, panel, label, used + ' of ' + cap + ' h', used / cap * 100, 'Hours used this month · resets ' + fmtDate(portal, reset));
+          }
           projects.forEach(function (p) {
+            if (retainers.indexOf(p) !== -1) return;
             var mine = allTasks.filter(function (i) { return i.project.id === p.id; });
             var done = mine.filter(isDone).length;
             var tasksCaption = mine.length ? done + ' of ' + mine.length + ' tasks done' : null;
-            var isRetainer = retainerTypes.indexOf(portal.norm(typeName[p.projectTypeId] || '')) !== -1;
             var due = toDate(p.dueDate);
-            if (isRetainer && cap > 0) {
-              var used = hoursThisMonth(res[5]);
-              var reset = new Date(today.getFullYear(), today.getMonth() + 1, 1);
-              bar(portal, panel, p.name + ' · retainer', used + ' of ' + cap + ' h', used / cap * 100, 'Hours used this month · resets ' + fmtDate(portal, reset));
-            } else if (due) {
+            if (due) {
               var start = toDate(p.startDate) || toDate(p.created) || today;
-              var span = Math.max(1, (due - start) / 86400000);
-              var elapsed = (today - start) / 86400000;
-              var daysLeft = Math.ceil((due - today) / 86400000);
+              var span = Math.max(1, daysBetween(start, due));
+              var elapsed = daysBetween(start, today);
+              var daysLeft = daysBetween(today, due);
               var value = daysLeft < 0 ? plural(-daysLeft, 'day over', 'days over') : daysLeft === 0 ? 'due today' : plural(daysLeft, 'day left', 'days left');
               var caption = [fmtDate(portal, start) + ' to ' + fmtDate(portal, due), tasksCaption].filter(Boolean).join(' · ');
               bar(portal, panel, p.name, value, elapsed / span * 100, caption);

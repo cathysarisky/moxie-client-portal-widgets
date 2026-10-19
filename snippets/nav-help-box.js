@@ -27,6 +27,8 @@
   ].join('\n');
 
   MoxiePortal.ready(function (portal) {
+    // The link goes to the help desk by default; with tickets off there is nothing to open.
+    if (LINK_PATH.indexOf('/requests') === 0 && !portal.features().ticketsEnabled) return;
     portal.style(CSS);
     var live = true;
 
