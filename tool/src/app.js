@@ -302,19 +302,17 @@
     var keyInput = textInput(key);
     keyInput.className = 'mp-filter-key';
     keyInput.placeholder = 'e.g. ClientType';
-    keyInput.setAttribute('aria-label', 'Custom field mapping key');
     var valueInput = textInput(value);
     valueInput.className = 'mp-filter-value';
-    valueInput.placeholder = 'e.g. TNC';
-    valueInput.setAttribute('aria-label', 'Value');
+    valueInput.placeholder = 'e.g. TEST';
     var removeButton = el('button', 'mp-small', 'Remove');
     removeButton.type = 'button';
     keyInput.addEventListener('input', emit);
     valueInput.addEventListener('input', emit);
     removeButton.addEventListener('click', function () { remove(row); });
-    row.appendChild(keyInput);
+    row.appendChild(part('Custom field', keyInput, 'mp-filter-part'));
     row.appendChild(el('span', 'mp-filter-is', 'is'));
-    row.appendChild(valueInput);
+    row.appendChild(part('Value', valueInput, 'mp-filter-part'));
     row.appendChild(removeButton);
     return row;
   }
@@ -486,7 +484,7 @@
       var keys = Object.keys(filter);
       if (!keys.length) rows.appendChild(filterRow('', '', collect, remove));
       keys.forEach(function (key) { rows.appendChild(filterRow(key, filter[key], collect, remove)); });
-      var add = el('button', 'mp-small', 'Add another field');
+      var add = el('button', 'mp-small', 'Add another field (all must match)');
       add.type = 'button';
       add.addEventListener('click', function () {
         var row = filterRow('', '', collect, remove);

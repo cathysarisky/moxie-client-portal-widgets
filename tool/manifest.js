@@ -4,7 +4,7 @@
 }(typeof self !== 'undefined' ? self : this, function () {
   'use strict';
 
-  var ONLY_FOR_HELP = 'Run this only for clients whose custom fields match, for example ClientType is TNC. '
+  var ONLY_FOR_HELP = 'Run this only for clients whose custom fields match, for example ClientType is TNC. With several fields, all of them must match. '
     + 'It works on top of the main client filter. Leave it empty to run for every client the main filter allows.';
 
   var NAMES = {
@@ -110,7 +110,7 @@
       internal: ['ICONS', 'snippets', 'active', 'portal'],
       settings: [
         { name: 'CLIENT_FILTER', type: 'filter', label: 'Only for clients whose…',
-          help: 'Decides which clients see any of the snippets. A client passes when every field matches; case and surrounding spaces are ignored. Leave it empty for every client.' },
+          help: 'Decides which clients see any of the snippets. With several fields, a client must match all of them; case and surrounding spaces are ignored. Leave it empty for every client.' },
         { name: 'WAITING_STATUSES', type: 'stringList', label: 'Task statuses that mean the client needs to act',
           help: 'The Waiting on you card shows these tasks and the Projects card counts them. Must match your project status names, apart from case.' },
         { name: 'TICKET_WAITING_STATUSES', type: 'stringList', label: 'Request statuses that mean the client needs to act',
