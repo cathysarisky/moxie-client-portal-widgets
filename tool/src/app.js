@@ -14,6 +14,20 @@
 
   // state.config is always full: every setting is present for the parent and every copy.
   var state = { config: null, problems: [] };
+  // While true, save() leaves storage alone: set when the stored settings came from a newer tool.
+  var holdSave = false;
+  var storageNoted = false;
+
+  function addMessage(text) {
+    document.getElementById('mp-messages').appendChild(el('p', null, text));
+  }
+
+  // Said once per visit, the first time storage fails.
+  function noteStorageFailure() {
+    if (storageNoted) return;
+    storageNoted = true;
+    addMessage('This browser won\'t remember your settings between visits. Use Save as file to keep them.');
+  }
 
   function snippetDef(id) {
     for (var i = 0; i < manifest.snippets.length; i++) {
@@ -100,10 +114,21 @@
   }
 
   function save() {
+    if (holdSave) return;
     try {
       window.localStorage.setItem(STORAGE_KEY, JSON.stringify(state.config));
     } catch (e) {
       // Storage blocked or full: the page keeps working for this visit.
+      noteStorageFailure();
+    }
+  }
+
+  function storageReadable() {
+    try {
+      window.localStorage.getItem(STORAGE_KEY);
+      return true;
+    } catch (e) {
+      return false;
     }
   }
 
@@ -112,7 +137,13 @@
       var text = window.localStorage.getItem(STORAGE_KEY);
       if (text) return fullConfig(gen.normalizeConfig(JSON.parse(text), manifest).config);
     } catch (e) {
-      // Unreadable or blocked storage: start from a blank form.
+      if (e && e.code === 'NEWER_VERSION') {
+        holdSave = true;
+        addMessage('Your saved settings were made by a newer version of this tool. Reload the page to update it.');
+      } else if (!storageReadable()) {
+        noteStorageFailure();
+      }
+      // Otherwise the saved settings are unreadable: start from a blank form.
     }
     return emptyConfig();
   }
@@ -507,6 +538,14 @@
     var summary = n === 1 ? '1 thing to check' : n + ' things to check';
     document.getElementById('mp-problems').textContent = n ? summary : '';
     Array.prototype.forEach.call(document.querySelectorAll('.mp-problem'), function (node) {
+      var control = node.parentNode.querySelector('input, textarea');
+      if (control) {
+        control.removeAttribute('aria-invalid');
+        var rest = (control.getAttribute('aria-describedby') || '').split(' ')
+          .filter(function (id) { return id && id !== node.id; }).join(' ');
+        if (rest) control.setAttribute('aria-describedby', rest);
+        else control.removeAttribute('aria-describedby');
+      }
       node.parentNode.removeChild(node);
     });
     var fields = {};
@@ -515,7 +554,15 @@
     });
     state.problems.forEach(function (problem) {
       var field = fields[problem.path];
-      if (field) field.appendChild(el('p', 'mp-problem', problem.message));
+      if (!field) return;
+      var note = el('p', 'mp-problem', problem.message);
+      note.id = nextId();
+      field.appendChild(note);
+      var control = field.querySelector('input, textarea');
+      if (!control) return;
+      control.setAttribute('aria-invalid', 'true');
+      var described = control.getAttribute('aria-describedby');
+      control.setAttribute('aria-describedby', described ? described + ' ' + note.id : note.id);
     });
   }
 
@@ -527,6 +574,7 @@
   }
 
   function onChange() {
+    holdSave = false;
     save();
     refreshOutput();
   }

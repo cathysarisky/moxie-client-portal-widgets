@@ -301,3 +301,44 @@ test('state survives a reload', async () => {
   assert.equal(t.$('[data-mp-field="TASKS_LABEL"] input').value, 'Later');
   assert.deepEqual(t.errors, []);
 });
+
+test('a browser that blocks storage still works', async () => {
+  const t = await openTool({
+    beforeParse(w) {
+      Object.defineProperty(w, 'localStorage', { get() { throw new Error('blocked'); } });
+    }
+  });
+  assert.deepEqual(t.errors, []);
+  t.$('[data-mp-toggle="nav-tasks-link"]').click();
+  assert.ok(output(t).includes('var TASKS_LABEL ='));
+  assert.match(t.$('#mp-messages').textContent, /remember/);
+  assert.equal(t.$$('#mp-messages p').length, 1);
+  assert.deepEqual(t.errors, []);
+});
+
+test('a non-numeric number is reported inline and linked to its control', async () => {
+  const t = await openTool();
+  t.$('[data-mp-toggle="home-projects"]').click();
+  const field = t.$('[data-mp-field="MAX_ROWS"]');
+  const input = field.querySelector('input');
+  type(t, input, 'abc');
+  const problem = field.querySelector('.mp-problem');
+  assert.match(problem.textContent, /whole number/);
+  assert.match(t.$('#mp-problems').textContent, /1 /);
+  assert.equal(input.getAttribute('aria-invalid'), 'true');
+  assert.ok(input.getAttribute('aria-describedby').split(' ').includes(problem.id));
+  type(t, input, '3');
+  assert.equal(field.querySelector('.mp-problem'), null);
+  assert.equal(t.$('#mp-problems').textContent, '');
+  assert.equal(input.hasAttribute('aria-invalid'), false);
+  assert.ok(!(input.getAttribute('aria-describedby') || '').includes(problem.id));
+});
+
+test('settings from a newer tool are kept until the user changes something', async () => {
+  const t = await openTool({ storage: { moxiePortalTool: 2 } });
+  assert.deepEqual(t.errors, []);
+  assert.match(t.$('#mp-messages').textContent, /newer version/);
+  assert.deepEqual(stored(t), { moxiePortalTool: 2 });
+  t.$('[data-mp-toggle="nav-tasks-link"]').click();
+  assert.equal(stored(t).moxiePortalTool, 1);
+});
