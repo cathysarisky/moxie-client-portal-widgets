@@ -7,10 +7,23 @@
   var ONLY_FOR_HELP = 'Run this only for clients whose custom fields match, for example ClientType is TNC. '
     + 'It works on top of the main client filter. Leave it empty to run for every client the main filter allows.';
 
+  var NAMES = {
+    'logo': 'Logo',
+    'custom-css': 'Custom styles',
+    'nav-tasks-link': 'Tasks menu link',
+    'nav-rename': 'Rename menu links',
+    'schedule-groups': 'Schedule groups',
+    'home-waiting': 'Waiting on you card',
+    'home-recent': 'Recently updated card',
+    'home-requests': 'Requests card',
+    'home-projects': 'Projects card',
+    'home-billing': 'Billing card'
+  };
+
   function snippet(id, description, card, settings, internal) {
     return {
       id: id,
-      name: id,
+      name: NAMES[id],
       description: description,
       readme: '#' + id,
       card: card,

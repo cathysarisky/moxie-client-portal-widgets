@@ -1,10 +1,11 @@
 'use strict';
-const test = require('node:test');
+const { test, before } = require('node:test');
 const assert = require('node:assert/strict');
 const { buildBundle } = require('../tool/lib/bundle.js');
 const manifest = require('../tool/manifest.js');
 
-const bundle = buildBundle();
+let bundle;
+before(() => { bundle = buildBundle(); });
 
 test('every manifest setting exists in its source and nothing is unlisted', () => {
   manifest.snippets.forEach((s) => {
@@ -57,4 +58,22 @@ test('a bogus manifest entry is reported by name', () => {
     cardNames: manifest.cardNames
   };
   assert.throws(() => buildBundle(undefined, bogus), /logo\.js: missing NOPE/);
+});
+
+test('a manifest omitting a real setting is reported by name', () => {
+  const short = {
+    parent: manifest.parent,
+    snippets: manifest.snippets.map((s) => (s.id === 'logo'
+      ? Object.assign({}, s, { settings: s.settings.filter((d) => d.name !== 'LOGO_WIDTH') })
+      : s)),
+    cardNames: manifest.cardNames
+  };
+  assert.throws(() => buildBundle(undefined, short), /logo\.js: unlisted LOGO_WIDTH/);
+});
+
+test('snippet names are plain language, not file ids', () => {
+  manifest.snippets.forEach((s) => {
+    assert.notEqual(s.name, s.id);
+    assert.ok(!/[a-z]-[a-z]/.test(s.name), s.name);
+  });
 });
