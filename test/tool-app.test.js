@@ -3,6 +3,8 @@ const test = require('node:test');
 const assert = require('node:assert/strict');
 const { openTool, STORAGE_KEY } = require('./tool-helpers.js');
 const manifest = require('../tool/manifest.js');
+const gen = require('../tool/src/generate.js');
+const { buildBundle } = require('../tool/lib/bundle');
 
 function output(t) {
   return t.$('#mp-output').value;
@@ -529,4 +531,220 @@ test('structured settings load from storage and survive wrong types', async () =
   assert.ok(out.includes('var RENAMES = {"Time":{"icon":"history"}};'));
   assert.ok(out.includes('var HOME_CARDS = [["recent"],["waiting"]];'));
   assert.equal(t.$('#mp-problems').textContent, '');
+});
+
+// Records downloads instead of navigating: the Blob given to URL.createObjectURL, the link
+// clicked and the URL revoked.
+function recordDownloads(downloads) {
+  return function (w) {
+    w.URL.createObjectURL = (blob) => { downloads.blobs.push(blob); return 'blob:fake'; };
+    w.URL.revokeObjectURL = (url) => downloads.revoked.push(url);
+    w.HTMLAnchorElement.prototype.click = function () {
+      downloads.links.push({ name: this.download, href: this.getAttribute('href') });
+    };
+  };
+}
+
+function messages(t) {
+  return t.$('#mp-messages').textContent;
+}
+
+const TWO_CSS = {
+  moxiePortalTool: 1,
+  parent: { CLIENT_FILTER: null },
+  snippets: [
+    { id: 'custom-css', settings: { ONLY_FOR: { ClientType: 'TNC' }, CSS: ['#app { --v-sidebar-base: #1B5E20 !important; }'] } },
+    { id: 'custom-css', settings: { ONLY_FOR: { ClientType: 'Agency' }, CSS: ['#app { --v-sidebar-base: #0D47A1 !important; }'] } }
+  ]
+};
+const TWO_CSS_PASTE = gen.generate(TWO_CSS, buildBundle(), manifest);
+const EDITED = 'The box contains changes made outside this tool. They won\'t be in the new paste. Load the settings anyway?';
+const START_OVER = 'Start over with a blank form? Your saved settings in this browser will be cleared.';
+
+test('a saved file round-trips', async () => {
+  const downloads = { blobs: [], links: [], revoked: [] };
+  const t = await openTool({ beforeParse: recordDownloads(downloads) });
+  t.$('[data-mp-toggle="nav-tasks-link"]').click();
+  type(t, t.$('[data-mp-field="TASKS_LABEL"] input'), 'X');
+  t.$('#mp-save-json').click();
+  await t.tick(10);
+  assert.equal(downloads.blobs.length, 1);
+  assert.deepEqual(downloads.links, [{ name: 'moxie-portal-settings.json', href: 'blob:fake' }]);
+  assert.deepEqual(downloads.revoked, ['blob:fake']);
+  assert.equal(t.$$('a[download]').length, 0, 'the temporary link is removed');
+  const text = await downloads.blobs[0].text();
+  assert.equal(text, JSON.stringify(stored(t), null, 2));
+
+  const fresh = await openTool();
+  await fresh.window.__mpTool.loadConfigText(text);
+  assert.ok(output(fresh).includes('"X"'));
+  assert.equal(fresh.$('[data-mp-field="TASKS_LABEL"] input').value, 'X');
+  assert.equal(stored(fresh).snippets[0].settings.TASKS_LABEL, 'X');
+  assert.equal(messages(fresh), '');
+  assert.deepEqual(t.errors, []);
+  assert.deepEqual(fresh.errors, []);
+});
+
+test('the script downloads as a file', async () => {
+  const downloads = { blobs: [], links: [], revoked: [] };
+  const t = await openTool({ beforeParse: recordDownloads(downloads) });
+  t.$('[data-mp-toggle="nav-tasks-link"]').click();
+  t.$('#mp-download-js').click();
+  await t.tick(10);
+  assert.deepEqual(downloads.links, [{ name: 'moxie-portal-embed.js', href: 'blob:fake' }]);
+  assert.equal(await downloads.blobs[0].text(), output(t));
+  assert.deepEqual(downloads.revoked, ['blob:fake']);
+  assert.deepEqual(t.errors, []);
+});
+
+test('random JSON is refused without changing the form', async () => {
+  const t = await openTool();
+  t.$('[data-mp-toggle="nav-tasks-link"]').click();
+  const before = output(t);
+  for (const text of ['[1,2]', '{"a":1}', 'not json']) {
+    await t.window.__mpTool.loadConfigText(text);
+    assert.equal(t.$('[data-mp-toggle="nav-tasks-link"]').checked, true, text);
+    assert.equal(messages(t), 'That file isn\'t a settings file from this tool.', text);
+    assert.equal(t.$$('#mp-messages p').length, 1, 'each action replaces the last message');
+  }
+  assert.equal(output(t), before);
+  assert.equal(stored(t).snippets.length, 1);
+  assert.deepEqual(t.errors, []);
+});
+
+test('unknown settings are named', async () => {
+  const t = await openTool();
+  await t.window.__mpTool.loadConfigText(JSON.stringify({
+    moxiePortalTool: 1,
+    parent: {},
+    snippets: [{ id: 'custom-css', settings: { FOO: 1 } }]
+  }));
+  assert.equal(messages(t), 'Ignored settings this version doesn\'t know: custom-css: FOO');
+  assert.equal(t.$('[data-mp-toggle="custom-css"]').checked, true);
+  assert.equal(t.$$('[data-mp-snippet="custom-css"]').length, 1);
+  assert.deepEqual(t.errors, []);
+});
+
+test('a newer version is explained', async () => {
+  const t = await openTool();
+  t.$('[data-mp-toggle="nav-tasks-link"]').click();
+  await t.window.__mpTool.loadConfigText('{"moxiePortalTool":2}');
+  assert.equal(messages(t), 'This file was made by a newer version of the tool. Reload the page and try again.');
+  assert.equal(t.$('[data-mp-toggle="nav-tasks-link"]').checked, true);
+  assert.equal(stored(t).moxiePortalTool, 1);
+  assert.deepEqual(t.errors, []);
+});
+
+test('paste from Moxie rebuilds the form', async () => {
+  const t = await openTool();
+  const asked = [];
+  t.window.confirm = (msg) => { asked.push(msg); return true; };
+  assert.equal(t.$('#mp-paste').hidden, true);
+  t.$('#mp-paste-open').click();
+  assert.equal(t.$('#mp-paste').hidden, false);
+  assert.equal(t.document.activeElement, t.$('#mp-paste-text'));
+  t.$('#mp-paste-text').value = TWO_CSS_PASTE;
+  t.$('#mp-paste-apply').click();
+  await t.tick();
+  assert.deepEqual(asked, []);
+  const sections = t.$$('[data-mp-snippet="custom-css"]');
+  assert.equal(sections.length, 2);
+  assert.equal(sections[1].querySelector('[data-mp-field="ONLY_FOR"] .mp-filter-value').value, 'Agency');
+  const out = output(t);
+  assert.equal(count(out, 'var ONLY_FOR = {"ClientType":"TNC"};'), 1);
+  assert.equal(count(out, 'var ONLY_FOR = {"ClientType":"Agency"};'), 1);
+  assert.equal(stored(t).snippets.length, 2);
+  assert.equal(t.$('#mp-paste').hidden, true);
+  assert.equal(messages(t), '');
+  assert.deepEqual(t.errors, []);
+});
+
+test('an edited box warns first', async () => {
+  const t = await openTool();
+  const asked = [];
+  t.window.confirm = (msg) => { asked.push(msg); return false; };
+  await t.window.__mpTool.applyPaste(TWO_CSS_PASTE + '\n(function(){})();');
+  assert.deepEqual(asked, [EDITED]);
+  assert.equal(t.$$('[data-mp-snippet]').length, 0);
+  assert.equal(t.window.localStorage.getItem(STORAGE_KEY), null);
+  t.window.confirm = (msg) => { asked.push(msg); return true; };
+  await t.window.__mpTool.applyPaste(TWO_CSS_PASTE + '\n(function(){})();');
+  assert.equal(asked.length, 2);
+  assert.equal(t.$$('[data-mp-snippet="custom-css"]').length, 2);
+  assert.deepEqual(t.errors, []);
+});
+
+test('a box that is not a paste from this tool is refused', async () => {
+  const t = await openTool();
+  t.$('[data-mp-toggle="nav-tasks-link"]').click();
+  for (const text of ['var x = 1;', '/* MoxiePortal settings: {nope} */']) {
+    await t.window.__mpTool.applyPaste(text);
+    assert.equal(messages(t), 'This doesn\'t look like a paste made by this tool.', text);
+    assert.equal(t.$('[data-mp-toggle="nav-tasks-link"]').checked, true, text);
+  }
+  assert.deepEqual(t.errors, []);
+});
+
+test('start over clears', async () => {
+  const t = await openTool();
+  t.$('[data-mp-toggle="nav-tasks-link"]').click();
+  const asked = [];
+  t.window.confirm = (msg) => { asked.push(msg); return false; };
+  t.$('#mp-reset').click();
+  assert.equal(t.$$('[data-mp-snippet]').length, 1, 'no change when the user says no');
+  t.window.confirm = (msg) => { asked.push(msg); return true; };
+  t.$('#mp-reset').click();
+  assert.deepEqual(asked, [START_OVER, START_OVER]);
+  assert.equal(t.$$('[data-mp-snippet]').length, 0);
+  assert.equal(t.$('[data-mp-toggle="nav-tasks-link"]').checked, false);
+  const fresh = await openTool();
+  assert.equal(output(t), output(fresh));
+  const saved = t.window.localStorage.getItem(STORAGE_KEY);
+  if (saved !== null) assert.deepEqual(JSON.parse(saved), gen.parseSettingsLine(output(fresh)));
+  assert.deepEqual(t.errors, []);
+});
+
+test('copy writes the output', async () => {
+  let recorded = null;
+  const timers = [];
+  const t = await openTool({
+    beforeParse(w) {
+      Object.defineProperty(w.navigator, 'clipboard', {
+        value: { writeText: (text) => { recorded = text; return Promise.resolve(); } }
+      });
+      // Timers are recorded, so the test runs the two-second one without waiting for it.
+      w.setTimeout = (fn, ms) => { timers.push({ fn, ms }); return timers.length; };
+      w.clearTimeout = () => {};
+    }
+  });
+  t.$('[data-mp-toggle="nav-tasks-link"]').click();
+  const button = t.$('#mp-copy');
+  button.click();
+  await t.tick();
+  assert.equal(recorded, output(t));
+  assert.equal(button.textContent, 'Copied');
+  assert.deepEqual(timers.map((timer) => timer.ms), [2000]);
+  timers[0].fn();
+  assert.equal(button.textContent, 'Copy script');
+  assert.deepEqual(t.errors, []);
+});
+
+test('choosing a settings file loads it', async () => {
+  const t = await openTool();
+  const input = t.$('#mp-load-json');
+  let opened = 0;
+  input.click = () => { opened += 1; };
+  t.$('#mp-load-json-button').click();
+  assert.equal(opened, 1);
+  const text = JSON.stringify({
+    moxiePortalTool: 1,
+    parent: {},
+    snippets: [{ id: 'nav-tasks-link', settings: { TASKS_LABEL: 'From file' } }]
+  });
+  const file = new t.window.File([text], 'moxie-portal-settings.json', { type: 'application/json' });
+  Object.defineProperty(input, 'files', { value: [file] });
+  input.dispatchEvent(new t.window.Event('change'));
+  await t.tick(10);
+  assert.ok(output(t).includes('var TASKS_LABEL = "From file";'));
+  assert.deepEqual(t.errors, []);
 });

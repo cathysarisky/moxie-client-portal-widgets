@@ -22,6 +22,16 @@
     document.getElementById('mp-messages').appendChild(el('p', null, text));
   }
 
+  function clearMessages() {
+    clear(document.getElementById('mp-messages'));
+  }
+
+  // An action's message replaces the last action's.
+  function showMessage(text) {
+    clearMessages();
+    addMessage(text);
+  }
+
   // Said once per visit, the first time storage fails.
   function noteStorageFailure() {
     if (storageNoted) return;
@@ -953,6 +963,157 @@
     save();
     refreshOutput();
   }
+
+  // ---------------------------------------------------------------------------
+  // Actions: settings file, paste from Moxie, start over, copy and download
+  // ---------------------------------------------------------------------------
+
+  var NOT_SETTINGS_FILE = 'That file isn\'t a settings file from this tool.';
+  var NEWER_FILE = 'This file was made by a newer version of the tool. Reload the page and try again.';
+  var NOT_TOOL_PASTE = 'This doesn\'t look like a paste made by this tool.';
+  var EDITED_PASTE = 'The box contains changes made outside this tool. They won\'t be in the new paste. '
+    + 'Load the settings anyway?';
+  var START_OVER = 'Start over with a blank form? Your saved settings in this browser will be cleared.';
+
+  var copyButton = document.getElementById('mp-copy');
+  var copyLabel = copyButton.textContent;
+  var copyTimer = null;
+  var loadInput = document.getElementById('mp-load-json');
+  var pasteArea = document.getElementById('mp-paste');
+  var pasteText = document.getElementById('mp-paste-text');
+
+  function download(name, text, type) {
+    var url = URL.createObjectURL(new Blob([text], { type: type }));
+    var link = el('a');
+    link.href = url;
+    link.download = name;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    // Once the click has started the download.
+    setTimeout(function () { URL.revokeObjectURL(url); }, 0);
+  }
+
+  function copied() {
+    copyButton.textContent = 'Copied';
+    clearTimeout(copyTimer);
+    copyTimer = setTimeout(function () { copyButton.textContent = copyLabel; }, 2000);
+  }
+
+  // For a browser without the clipboard API, or one that refuses it.
+  function copyBySelecting() {
+    var output = document.getElementById('mp-output');
+    output.focus();
+    output.select();
+    var done = false;
+    try {
+      done = document.execCommand('copy');
+    } catch (e) {
+      // Not copied: the script is selected, so the user can copy it themselves.
+    }
+    if (done) copied();
+    else showMessage('This browser wouldn\'t copy the script. It\'s selected now: copy it with your keyboard or menu.');
+  }
+
+  function copyOutput() {
+    var text = document.getElementById('mp-output').value;
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(text).then(copied, copyBySelecting);
+    } else {
+      copyBySelecting();
+    }
+  }
+
+  // Replaces the form with normalizeConfig's result, shared by the settings file and the paste.
+  function useConfig(normalized, focus) {
+    state.config = fullConfig(normalized.config);
+    holdSave = false;
+    restructure(focus);
+    if (normalized.dropped.length) {
+      addMessage('Ignored settings this version doesn\'t know: ' + normalized.dropped.join(', '));
+    }
+  }
+
+  function loadConfigText(text) {
+    clearMessages();
+    var normalized;
+    try {
+      normalized = gen.normalizeConfig(JSON.parse(text), manifest);
+    } catch (e) {
+      addMessage(e && e.code === 'NEWER_VERSION' ? NEWER_FILE : NOT_SETTINGS_FILE);
+      return Promise.resolve();
+    }
+    useConfig(normalized);
+    return Promise.resolve();
+  }
+
+  // The settings line rebuilds the form. A box whose script differs from what those settings
+  // make was edited by hand, and the new paste would lose the edits, so the user decides.
+  function applyPaste(text) {
+    clearMessages();
+    var normalized;
+    var regenerated;
+    try {
+      normalized = gen.normalizeConfig(gen.parseSettingsLine(text), manifest);
+      regenerated = gen.generate(fullConfig(normalized.config), bundle, manifest);
+    } catch (e) {
+      addMessage(e && e.code === 'NEWER_VERSION' ? NEWER_FILE : NOT_TOOL_PASTE);
+      return Promise.resolve();
+    }
+    if (!gen.bodyMatches(text, regenerated) && !window.confirm(EDITED_PASTE)) return Promise.resolve();
+    pasteArea.hidden = true;
+    useConfig(normalized, function () { return first('#mp-paste-open'); });
+    return Promise.resolve();
+  }
+
+  function startOver() {
+    if (!window.confirm(START_OVER)) return;
+    state.config = emptyConfig();
+    try {
+      window.localStorage.removeItem(STORAGE_KEY);
+    } catch (e) {
+      // Storage blocked: there is nothing saved to clear.
+    }
+    clearMessages();
+    restructure();
+  }
+
+  function readText(file) {
+    if (file.text) return file.text();
+    return new Promise(function (resolve, reject) {
+      var reader = new FileReader();
+      reader.onload = function () { resolve(reader.result); };
+      reader.onerror = function () { reject(reader.error); };
+      reader.readAsText(file);
+    });
+  }
+
+  document.getElementById('mp-load-json-button').addEventListener('click', function () { loadInput.click(); });
+  loadInput.addEventListener('change', function () {
+    var file = loadInput.files && loadInput.files[0];
+    // Cleared, so choosing the same file again loads it again.
+    loadInput.value = '';
+    if (!file) return;
+    readText(file).then(loadConfigText, function () {
+      showMessage('That file couldn\'t be opened. Try choosing it again.');
+    });
+  });
+  document.getElementById('mp-save-json').addEventListener('click', function () {
+    download('moxie-portal-settings.json', JSON.stringify(state.config, null, 2), 'application/json');
+  });
+  document.getElementById('mp-paste-open').addEventListener('click', function () {
+    pasteArea.hidden = false;
+    pasteText.focus();
+  });
+  document.getElementById('mp-paste-apply').addEventListener('click', function () { applyPaste(pasteText.value); });
+  document.getElementById('mp-reset').addEventListener('click', startOver);
+  copyButton.addEventListener('click', copyOutput);
+  document.getElementById('mp-download-js').addEventListener('click', function () {
+    download('moxie-portal-embed.js', document.getElementById('mp-output').value, 'text/javascript');
+  });
+
+  // For the tests, which cannot use a real file dialog.
+  window.__mpTool = { loadConfigText: loadConfigText, applyPaste: applyPaste };
 
   // Saved settings that cannot be shown must not leave a blank page on every visit: fall back
   // to a blank form. Storage keeps the saved settings until the user changes something.

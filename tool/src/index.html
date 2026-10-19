@@ -19,6 +19,11 @@
     <button type="button" id="mp-paste-open">Paste an existing script</button>
     <button type="button" id="mp-reset">Start over</button>
   </div>
+  <div id="mp-paste" hidden>
+    <label class="mp-label" for="mp-paste-text">Paste everything from Moxie's JavaScript embed code box</label>
+    <textarea id="mp-paste-text" class="mp-code" rows="8" spellcheck="false"></textarea>
+    <button type="button" id="mp-paste-apply">Load these settings</button>
+  </div>
   <div id="mp-messages" aria-live="polite"></div>
   <section id="mp-parent"></section>
   <section id="mp-snippets"></section>
