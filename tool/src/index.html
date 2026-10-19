@@ -16,7 +16,7 @@
     <input type="file" id="mp-load-json" class="mp-hidden" accept=".json,application/json">
     <button type="button" id="mp-load-json-button">Load settings file</button>
     <button type="button" id="mp-save-json">Save settings file</button>
-    <button type="button" id="mp-paste-open">Paste an existing script</button>
+    <button type="button" id="mp-paste-open">Paste from Moxie</button>
     <button type="button" id="mp-reset">Start over</button>
   </div>
   <div id="mp-paste" hidden>
@@ -32,7 +32,7 @@
     <h2>Your script</h2>
     <div id="mp-problems"></div>
     <textarea id="mp-output" rows="12" readonly></textarea>
-    <p>
+    <p class="mp-buttons">
       <button type="button" id="mp-copy">Copy script</button>
       <button type="button" id="mp-download-js">Download as a file</button>
     </p>
@@ -40,6 +40,7 @@
       <li>Copy the script above (or download it and open the file).</li>
       <li>In Moxie, open <strong>Settings &gt; Client Portal &gt; Advanced</strong> and find the <strong>JavaScript embed code</strong> box.</li>
       <li>Paste the script into that box, replacing anything already there, and save.</li>
+      <li>Check your work by viewing the portal as a client. Load it sparingly: Moxie's sign-in service blocks an address that loads the portal roughly fifteen times in five minutes.</li>
     </ol>
   </section>
 </main>

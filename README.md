@@ -13,6 +13,7 @@ Drop-in customisations for the [Moxie](https://www.withmoxie.com) client portal.
 | `home-recent` | Home card showing the latest comment or change on each task. |
 | `home-requests` | Replaces the Home Requests card with every open ticket for the client. |
 | `home-projects` | Replaces the Home "Projects" card with the client's actual projects. |
+| `home-billing` | Home card with the client's invoice totals, hours not yet invoiced, and whether they have credit or a balance due. |
 
 ![The Waiting on you card in a live portal, retitled "Needs your attention", listing four tasks with their status, project and a link to each project's task board](docs/screenshots/waiting-on-you.jpg)
 
@@ -40,6 +41,8 @@ Load the portal sparingly while testing. Moxie's sign-in service blocks an addre
 
 ## Install
 
+**The easy way: the configuration tool.** Open the [configuration tool](https://cathysarisky.github.io/moxie-client-portal-widgets/), tick the snippets you want, fill in the fields, copy the paste, and paste it into the box described in step 1, replacing anything already there. Then save and check your work as in steps 6 and 7. The steps below are for doing it by hand.
+
 Everything happens in your browser: copy a file from this repository, paste it into Moxie.
 
 1. In Moxie, open **Settings > Client Portal > Advanced** and find the **JavaScript embed code** box. Keep that tab open.
@@ -53,7 +56,9 @@ If nothing shows up, the usual reason is `CLIENT_FILTER`: the client you are loo
 
 ### Changing or removing a snippet later
 
-Each snippet's settings are the lines starting with `var` just under its banner comment, the one that reads `/* MoxiePortal snippet: ... */`. Edit them in the Moxie box and save.
+If your paste came from the configuration tool, go back to the tool, choose **Paste from Moxie**, paste what is in the box, change what you want and copy the new paste over the old one.
+
+To do it by hand instead: each snippet's settings are the lines starting with `var` just under its banner comment, the one that reads `/* MoxiePortal snippet: ... */`. Edit them in the Moxie box and save.
 
 To remove a snippet, delete its block: from its banner comment down to the line before the next banner, or to the end of the box. To update a snippet, delete the old block and paste the new file in its place.
 
@@ -93,10 +98,10 @@ var HOME_CARDS = [
 
 var HOME_CARDS = ['waiting', ['requests', 'projects']];   // Waiting full width, then a pair
 
-var HOME_CARDS = [['requests']];                          // only Requests, even if other snippets are pasted
+var HOME_CARDS = [['requests']];                          // Requests first; any other pasted card follows in a row of its own
 ```
 
-The names are `waiting`, `recent`, `requests` and `projects`. Remove a name and that card is not shown even if its snippet is pasted. A pasted card whose name is missing from the list is still shown, after the listed ones, in a row of its own, so forgetting to update the list never hides anything by accident.
+The names are `waiting`, `recent`, `requests`, `projects` and `billing`. Removing a name does not hide that card: a pasted card whose name is missing from the list is still shown, after the listed ones, in a row of its own, so forgetting to update the list never hides anything by accident. To leave a card off the page, leave its snippet out of the box.
 
 ## Snippets
 
@@ -294,6 +299,8 @@ Register styles, hooks and cards while your function runs, or from a promise tha
 
 The bundled files stick to ES5 (`var`, `function`) so they paste anywhere without a build step. Your own snippets can use whatever JavaScript your clients' browsers support. A snippet that throws is logged to the browser console as `[MoxiePortal] snippet failed` and does not stop the others.
 
+A snippet appears in the configuration tool once it has an entry in `tool/manifest.js` listing its settings. `npm test` fails if the manifest and the snippet file disagree: a setting the manifest lists that the file lacks, or a setting at the top of the file that the manifest leaves out.
+
 ### The `portal` object
 
 **App access**
@@ -373,9 +380,12 @@ The bundled files stick to ES5 (`var`, `function`) so they paste anywhere withou
 ```sh
 npm install
 npm test        # syntax-checks every file, then runs the jsdom tests
+npm run build:tool   # writes tool/dist/index.html
 ```
 
-Tests cover the parent script and, in `test/<snippet>.test.js`, the `nav-rename` and `schedule-groups` snippets; the other snippets are checked by hand in the portal. To assemble everything into one file for your own pasting, concatenate in the right order: `cat core/moxie-portal.js snippets/*.js > portal.js`.
+Tests cover the parent script and, in `test/<snippet>.test.js`, the `nav-rename`, `schedule-groups` and `home-billing` snippets; the other snippets are checked by hand in the portal. To assemble everything into one file for your own pasting, concatenate in the right order: `cat core/moxie-portal.js snippets/*.js > portal.js`.
+
+The configuration tool is one self-contained page built from `tool/src` and `tool/manifest.js`; `test/tool-*.test.js` cover it. `.github/workflows/pages.yml` runs the tests, builds the page and deploys it to GitHub Pages on every push to `main`. For that to work, the repository's GitHub Pages source must be set to "GitHub Actions" once, under **Settings > Pages**.
 
 ## License
 
