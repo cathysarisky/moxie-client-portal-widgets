@@ -48,7 +48,7 @@ Everything happens in your browser: copy a file from this repository, paste it i
 1. In Moxie, open **Settings > Client Portal > Advanced** and find the **JavaScript embed code** box. Keep that tab open.
 2. Open [core/moxie-portal.js](core/moxie-portal.js) on GitHub and click the **Copy raw file** button above the code (the two-squares icon), or select all of the text and copy it.
 3. Paste it into the box. This is the parent script, and it must be the first thing in the box.
-4. In the pasted text, find the settings near the top: `var CLIENT_FILTER`, `var WAITING_STATUSES`, `var TICKET_WAITING_STATUSES` and `var HOME_CARDS`. Change them for your workspace; [Parent settings](#parent-settings) explains each. The defaults run for every client and show all four Home cards.
+4. In the pasted text, find the settings near the top: `var CLIENT_FILTER`, `var WAITING_STATUSES`, `var TICKET_WAITING_STATUSES` and `var HOME_CARDS`. Change them for your workspace; [Parent settings](#parent-settings) explains each. The defaults run for every client and show all the Home cards you paste.
 5. For each widget you want, open its file in the [snippets](snippets/) folder, copy it the same way, click at the very end of the box and paste it there. Snippets can go in any order, as long as every one of them is below the parent.
 6. Save.
 7. Check your work by viewing as a client.

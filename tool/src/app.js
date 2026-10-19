@@ -856,6 +856,8 @@
       refreshOutput();
       return true;
     } catch (e) {
+      // The message the user sees says only that loading failed; this is for a support conversation.
+      console.error('[MoxiePortal tool] settings could not be loaded', e);
       state.config = fallback();
       renderAll();
       refreshOutput();
@@ -1005,7 +1007,8 @@
   var NEWER_PASTE = 'That paste was made by a newer version of the tool. Reload the page and try again.';
   var NOT_TOOL_PASTE = 'This doesn\'t look like a paste made by this tool.';
   var NOT_LOADED = 'Those settings couldn\'t be loaded.';
-  var EDITED_PASTE = 'The box contains changes made outside this tool. They won\'t be in the new paste. '
+  var EDITED_PASTE = 'The script in the box isn\'t what this tool makes from its settings line: either it was '
+    + 'edited by hand, or the snippets have been updated since. Hand edits won\'t be in the new paste. '
     + 'Load the settings anyway?';
   var START_OVER = 'Start over with a blank form? Your saved settings in this browser will be cleared.';
 
@@ -1092,7 +1095,8 @@
   }
 
   // The settings line rebuilds the form. A box whose script differs from what those settings
-  // make was edited by hand, and the new paste would lose the edits, so the user decides.
+  // make was edited by hand or predates a snippet update; the new paste would lose any hand
+  // edits, so the user decides.
   // Saying no to the warning changes nothing, messages included.
   function applyPaste(text) {
     var normalized;
@@ -1135,15 +1139,33 @@
     });
   }
 
-  document.getElementById('mp-load-json-button').addEventListener('click', function () { loadInput.click(); });
-  loadInput.addEventListener('change', function () {
-    var file = loadInput.files && loadInput.files[0];
-    // Cleared, so choosing the same file again loads it again.
-    loadInput.value = '';
+  // Shared by the file picker and a file dropped on the load button.
+  function loadFile(file) {
     if (!file) return;
     readText(file).then(loadConfigText, function () {
       showMessage('That file couldn\'t be opened. Try choosing it again.');
     });
+  }
+
+  var loadButton = document.getElementById('mp-load-json-button');
+  loadButton.addEventListener('click', function () { loadInput.click(); });
+  loadButton.addEventListener('dragover', function (e) {
+    // Cancelling dragover is what lets the button take the drop.
+    e.preventDefault();
+    if (e.dataTransfer) e.dataTransfer.dropEffect = 'copy';
+    loadButton.classList.add('mp-drop-ready');
+  });
+  loadButton.addEventListener('dragleave', function () { loadButton.classList.remove('mp-drop-ready'); });
+  loadButton.addEventListener('drop', function (e) {
+    e.preventDefault();
+    loadButton.classList.remove('mp-drop-ready');
+    loadFile(e.dataTransfer && e.dataTransfer.files && e.dataTransfer.files[0]);
+  });
+  loadInput.addEventListener('change', function () {
+    var file = loadInput.files && loadInput.files[0];
+    // Cleared, so choosing the same file again loads it again.
+    loadInput.value = '';
+    loadFile(file);
   });
   document.getElementById('mp-save-json').addEventListener('click', function () {
     download('moxie-portal-settings.json', JSON.stringify(state.config, null, 2), 'application/json');

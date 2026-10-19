@@ -267,11 +267,18 @@ test('every simple editor turns a wrong-typed value into its empty value', async
   assert.match(t.$('#mp-problems').textContent, /1 /);
 });
 
+// Records the page's console.error calls instead of printing them.
+function recordConsoleErrors(logged) {
+  return (w) => { w.console.error = (...args) => { logged.push(args); }; };
+}
+
 test('a form that fails to render falls back to a blank one', async () => {
   const seed = { moxiePortalTool: 1, parent: {}, snippets: [{ id: 'nav-tasks-link', settings: { TASKS_LABEL: 'Kept' } }] };
+  const logged = [];
   const t = await openTool({
     storage: seed,
     beforeParse(w) {
+      recordConsoleErrors(logged)(w);
       // The first textarea the app creates throws, as a broken editor would.
       const create = w.document.createElement;
       let failed = false;
@@ -290,6 +297,9 @@ test('a form that fails to render falls back to a blank one', async () => {
   assert.ok(output(t).startsWith('/* MoxiePortal settings:'));
   assert.ok(!output(t).includes('Kept'));
   assert.deepEqual(stored(t), seed, 'the stored settings are not overwritten');
+  assert.equal(logged.length, 1, 'the failure is logged for support');
+  assert.equal(logged[0][0], '[MoxiePortal tool] settings could not be loaded');
+  assert.equal(logged[0][1].message, 'editor failed');
 });
 
 test('state survives a reload', async () => {
@@ -562,7 +572,8 @@ const TWO_CSS = {
   ]
 };
 const TWO_CSS_PASTE = gen.generate(TWO_CSS, buildBundle(), manifest);
-const EDITED = 'The box contains changes made outside this tool. They won\'t be in the new paste. Load the settings anyway?';
+const EDITED = 'The script in the box isn\'t what this tool makes from its settings line: either it was edited by hand, '
+  + 'or the snippets have been updated since. Hand edits won\'t be in the new paste. Load the settings anyway?';
 const START_OVER = 'Start over with a blank form? Your saved settings in this browser will be cleared.';
 
 test('a saved file round-trips', async () => {
@@ -722,7 +733,8 @@ function breakNextTextarea(t) {
 }
 
 test('settings that cannot be shown leave the form as it was', async () => {
-  const t = await openTool();
+  const logged = [];
+  const t = await openTool({ beforeParse: recordConsoleErrors(logged) });
   t.$('[data-mp-toggle="nav-tasks-link"]').click();
   type(t, t.$('[data-mp-field="TASKS_LABEL"] input'), 'Before');
   const before = { output: output(t), stored: stored(t) };
@@ -740,6 +752,10 @@ test('settings that cannot be shown leave the form as it was', async () => {
     assert.deepEqual(stored(t), before.stored, name);
     assert.equal(t.$('#mp-paste-text').value, TWO_CSS_PASTE, name + ': the paste stays to try again');
   }
+  assert.deepEqual(logged.map((args) => [args[0], args[1].message]), [
+    ['[MoxiePortal tool] settings could not be loaded', 'editor failed'],
+    ['[MoxiePortal tool] settings could not be loaded', 'editor failed']
+  ]);
   assert.deepEqual(t.errors, []);
 });
 
@@ -837,5 +853,33 @@ test('choosing a settings file loads it', async () => {
   input.dispatchEvent(new t.window.Event('change'));
   await t.tick(10);
   assert.ok(output(t).includes('var TASKS_LABEL = "From file";'));
+  assert.deepEqual(t.errors, []);
+});
+
+test('a settings file dropped on the load button loads it', async () => {
+  const t = await openTool();
+  const button = t.$('#mp-load-json-button');
+  const over = new t.window.Event('dragover', { bubbles: true, cancelable: true });
+  button.dispatchEvent(over);
+  assert.ok(over.defaultPrevented, 'the button accepts a drop');
+  assert.ok(button.classList.contains('mp-drop-ready'));
+  button.dispatchEvent(new t.window.Event('dragleave', { bubbles: true }));
+  assert.ok(!button.classList.contains('mp-drop-ready'));
+  button.dispatchEvent(new t.window.Event('dragover', { bubbles: true, cancelable: true }));
+  const text = JSON.stringify({
+    moxiePortalTool: 1,
+    parent: {},
+    snippets: [{ id: 'nav-tasks-link', settings: { TASKS_LABEL: 'Dropped' } }]
+  });
+  const drop = new t.window.Event('drop', { bubbles: true, cancelable: true });
+  Object.defineProperty(drop, 'dataTransfer', {
+    value: { files: [new t.window.File([text], 'x.json', { type: 'application/json' })] }
+  });
+  button.dispatchEvent(drop);
+  assert.ok(drop.defaultPrevented, 'the browser does not open the file itself');
+  assert.ok(!button.classList.contains('mp-drop-ready'));
+  await t.tick(10);
+  assert.ok(output(t).includes('var TASKS_LABEL = "Dropped";'));
+  assert.equal(stored(t).snippets[0].settings.TASKS_LABEL, 'Dropped');
   assert.deepEqual(t.errors, []);
 });

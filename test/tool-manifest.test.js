@@ -1,8 +1,12 @@
 'use strict';
 const { test, before } = require('node:test');
 const assert = require('node:assert/strict');
+const fs = require('node:fs');
+const path = require('node:path');
 const { buildBundle } = require('../tool/lib/bundle.js');
 const manifest = require('../tool/manifest.js');
+
+const SNIPPETS_DIR = path.join(__dirname, '..', 'snippets');
 
 let bundle;
 before(() => { bundle = buildBundle(); });
@@ -76,4 +80,50 @@ test('snippet names are plain language, not file ids', () => {
     assert.notEqual(s.name, s.id);
     assert.ok(!/[a-z]-[a-z]/.test(s.name), s.name);
   });
+});
+
+// Values from the bundle come from another realm, so plain objects are told apart by tag, not prototype.
+const isPlainObject = (v) => Object.prototype.toString.call(v) === '[object Object]';
+const isStringArray = (v) => Array.isArray(v) && v.every((x) => typeof x === 'string');
+const FITS_TYPE = {
+  text: (v) => typeof v === 'string',
+  number: (v) => typeof v === 'number',
+  stringList: isStringArray,
+  cssLines: isStringArray,
+  size: (v) => typeof v === 'number' || typeof v === 'string',
+  filter: (v) => v === null || isPlainObject(v),
+  logo: (v) => typeof v === 'string' || v === null,
+  renames: isPlainObject,
+  groups: Array.isArray,
+  homeCards: Array.isArray
+};
+
+test('every file default fits its field type', () => {
+  const all = [['parent', manifest.parent.settings, bundle.parent.defaults]]
+    .concat(manifest.snippets.map((s) => [s.id, s.settings, bundle.snippets[s.id].defaults]));
+  all.forEach(([id, defs, defaults]) => {
+    defs.forEach((def) => {
+      assert.ok(def.type in FITS_TYPE, id + ' ' + def.name + ': no check for type ' + def.type);
+      assert.ok(FITS_TYPE[def.type](defaults[def.name]), id + ' ' + def.name + ' is not a ' + def.type
+        + ': ' + JSON.stringify(defaults[def.name]));
+    });
+  });
+});
+
+test('every snippet file has a manifest entry', () => {
+  const ids = manifest.snippets.map((s) => s.id);
+  fs.readdirSync(SNIPPETS_DIR).filter((f) => f.endsWith('.js')).forEach((file) => {
+    assert.ok(ids.includes(path.basename(file, '.js')), file + ' is not in the manifest');
+  });
+});
+
+test('a snippet\'s card matches the name it mounts', () => {
+  manifest.snippets.forEach((s) => {
+    const source = fs.readFileSync(path.join(SNIPPETS_DIR, s.id + '.js'), 'utf8');
+    const mount = /portal\.home\.mount\(\{[^}]*?\bname:\s*'([^']*)'/.exec(source);
+    assert.equal(mount ? mount[1] : null, s.card, s.id + ' mounts ' + (mount && mount[1]) + ' but its card is ' + s.card);
+    assert.equal(manifest.cardNames[s.id], s.card || undefined, s.id + ' in cardNames');
+  });
+  assert.deepEqual(Object.keys(manifest.cardNames).sort(),
+    manifest.snippets.filter((s) => s.card).map((s) => s.id).sort());
 });

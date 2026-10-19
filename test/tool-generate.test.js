@@ -31,13 +31,28 @@ test('the paste parses, has one comment, and round-trips', () => {
   assert.ok(filter > 0 && green > filter && blue > green);
 });
 
-test('hostile text survives', () => {
-  const title = 'It\'s "done" */ line\nnext end \u2028 and \u2029';
+const HOME_PAGE = '<div class="welcome-page"><h1>Hello</h1><div class="action-dashboard"></div></div>';
+const NOTHING_WAITING = { '/projects': [], '/projectTypes': [], '/tickets?open=true': [], '/tickets/settings': [] };
+
+test('hostile text survives', async () => {
+  const title = 'It\'s "done" */ line\nnext end \u2028 and \u2029 a</script><img src=x>';
   const config = { moxiePortalTool: 1, parent: {}, snippets: [{ id: 'home-waiting', settings: { TITLE: title } }] };
   const out = gen.generate(config, bundle, manifest);
   assert.equal(parseSource(out).comments.length, 1);
   assert.equal(gen.parseSettingsLine(out).snippets[0].settings.TITLE, title);
   assert.ok(!out.includes('\u2028') && !out.includes('\u2029'));
+  assert.ok(!/<\/script/i.test(out), 'a closing tag cannot end an inline script early');
+  const t = boot({ source: out, html: HOME_PAGE, route: '/welcome', responses: NOTHING_WAITING });
+  await tick();
+  assert.equal(t.document.querySelector('#mp-waiting h3').textContent, title);
+});
+
+test('every snippet\'s slots fill with its defaults', () => {
+  const config = { moxiePortalTool: 1, parent: {}, snippets: manifest.snippets.map((s) => ({ id: s.id, settings: {} })) };
+  const out = gen.generate(config, bundle, manifest);
+  assert.ok(!out.includes('{{'), 'an unfilled slot is left in the paste');
+  assert.equal(parseSource(out).comments.length, 1);
+  assert.equal(gen.renderTemplate('var ROW_2 = {{ROW_2}};', { ROW_2: 'a</b' }), 'var ROW_2 = "a<\\/b";');
 });
 
 test('missing settings get defaults, formDefault first', () => {

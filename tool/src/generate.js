@@ -23,8 +23,14 @@
     });
   }
 
+  // A literal closing tag would end an inline script element early, so it is written as <\/,
+  // which JSON and JavaScript both read back as </.
+  function escapeClosingTags(text) {
+    return text.replace(/<\//g, '<\\/');
+  }
+
   function serializeSettings(config) {
-    return escapeLineSeparators(JSON.stringify(config)).replace(/\*\//g, '*\\/');
+    return escapeClosingTags(escapeLineSeparators(JSON.stringify(config))).replace(/\*\//g, '*\\/');
   }
 
   function settingsLine(config) {
@@ -57,8 +63,8 @@
   }
 
   function renderTemplate(template, values) {
-    return template.replace(/\{\{([A-Z_]+)\}\}/g, function (all, name) {
-      return escapeLineSeparators(JSON.stringify(values[name]));
+    return template.replace(/\{\{([A-Z0-9_]+)\}\}/g, function (all, name) {
+      return escapeClosingTags(escapeLineSeparators(JSON.stringify(values[name])));
     });
   }
 
