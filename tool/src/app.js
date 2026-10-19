@@ -140,7 +140,19 @@
       });
       return out;
     },
-    homeCards: function (value) { return Array.isArray(value) ? value : []; }
+    homeCards: function (value) { return Array.isArray(value) ? value : []; },
+    boolean: function (value) { return value === true; },
+    pair: function (value) {
+      var list = Array.isArray(value) ? value : [];
+      return [typeof list[0] === 'string' ? list[0] : '', typeof list[1] === 'string' ? list[1] : ''];
+    },
+    stringMap: function (value) {
+      var out = {};
+      if (value && typeof value === 'object' && !Array.isArray(value)) {
+        Object.keys(value).forEach(function (key) { if (typeof value[key] === 'string') out[key] = value[key]; });
+      }
+      return out;
+    }
   };
 
   function shapeAll(defs, values) {
@@ -459,6 +471,75 @@
       input.className = 'mp-short';
       input.addEventListener('input', function () { onChange(readSize(input.value)); });
       return labelled(def, input);
+    },
+
+    boolean: function (def, value, onChange) {
+      var input = el('input');
+      input.type = 'checkbox';
+      input.checked = shapes.boolean(value);
+      input.addEventListener('change', function () { onChange(input.checked); });
+      return labelled(def, input);
+    },
+
+    // Two boxes, named by def.parts, that emit a two-item list.
+    pair: function (def, value, onChange) {
+      var pair = shapes.pair(value);
+      var body = el('div', 'mp-pair');
+      var inputs = (def.parts || ['First', 'Second']).map(function (text, i) {
+        var input = textInput(pair[i]);
+        input.addEventListener('input', emit);
+        body.appendChild(part(text, input, 'mp-pair-part'));
+        return input;
+      });
+      function emit() { onChange(inputs.map(function (input) { return input.value; })); }
+      return grouped(def, body);
+    },
+
+    // Rows of name + wording that emit an object; a row with no name is left out.
+    stringMap: function (def, value, onChange) {
+      var body = el('div', 'mp-map');
+      var rows = el('div', 'mp-map-rows');
+      function collect() {
+        var out = {};
+        Array.prototype.forEach.call(rows.children, function (row) {
+          var key = row.querySelector('.mp-map-key').value.trim();
+          if (key) out[key] = row.querySelector('.mp-map-value').value.trim();
+        });
+        onChange(out);
+      }
+      function mapRow(key, val) {
+        var row = el('div', 'mp-map-row');
+        var keyInput = textInput(key);
+        keyInput.className = 'mp-map-key';
+        var valueInput = textInput(val);
+        valueInput.className = 'mp-map-value';
+        keyInput.addEventListener('input', collect);
+        valueInput.addEventListener('input', collect);
+        var removeButton = button('Remove');
+        removeButton.addEventListener('click', function () {
+          if (rows.children.length > 1) rows.removeChild(row);
+          else rows.replaceChild(mapRow('', ''), row);
+          collect();
+        });
+        row.appendChild(part(def.keyLabel || 'Name', keyInput, 'mp-filter-part'));
+        row.appendChild(part(def.valueLabel || 'Value', valueInput, 'mp-filter-part'));
+        row.appendChild(removeButton);
+        return row;
+      }
+      var map = shapes.stringMap(value);
+      var keys = Object.keys(map);
+      if (!keys.length) rows.appendChild(mapRow('', ''));
+      keys.forEach(function (key) { rows.appendChild(mapRow(key, map[key])); });
+      var add = button('Add another');
+      add.className += ' mp-map-add';
+      add.addEventListener('click', function () {
+        var row = mapRow('', '');
+        rows.appendChild(row);
+        row.querySelector('.mp-map-key').focus();
+      });
+      body.appendChild(rows);
+      body.appendChild(add);
+      return grouped(def, body);
     },
 
     // Rows of custom field + value. No row with a field name means every client (null).

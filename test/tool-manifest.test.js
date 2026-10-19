@@ -95,7 +95,10 @@ const FITS_TYPE = {
   logo: (v) => typeof v === 'string' || v === null,
   renames: isPlainObject,
   groups: Array.isArray,
-  homeCards: Array.isArray
+  homeCards: Array.isArray,
+  boolean: (v) => typeof v === 'boolean',
+  pair: (v) => isStringArray(v) && v.length === 2,
+  stringMap: (v) => isPlainObject(v) && Object.keys(v).every((k) => typeof v[k] === 'string')
 };
 
 test('every file default fits its field type', () => {

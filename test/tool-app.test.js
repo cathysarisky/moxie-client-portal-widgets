@@ -883,3 +883,51 @@ test('a settings file dropped on the load button loads it', async () => {
   assert.equal(stored(t).snippets[0].settings.TASKS_LABEL, 'Dropped');
   assert.deepEqual(t.errors, []);
 });
+
+test('a boolean field is a checkbox that emits true or false', async () => {
+  const t = await openTool();
+  t.$('[data-mp-toggle="home-greeting"]').click();
+  const box = t.$('[data-mp-field="HIDE_HEADING"] input[type="checkbox"]');
+  assert.equal(box.checked, false);
+  assert.ok(output(t).includes('var HIDE_HEADING = false;'));
+  box.click();
+  assert.ok(output(t).includes('var HIDE_HEADING = true;'));
+  t.$('[data-mp-toggle="welcome-tour"]').click();
+  assert.equal(t.$('[data-mp-field="SHOW_TOUR"] input[type="checkbox"]').checked, true);
+  assert.ok(output(t).includes('var SHOW_TOUR = true;'));
+});
+
+test('a pair field is two boxes that emit a two-item list', async () => {
+  const t = await openTool();
+  t.$('[data-mp-toggle="home-greeting"]').click();
+  const inputs = t.$$('[data-mp-field="TICKET_NOUN"] input');
+  assert.deepEqual(inputs.map((i) => i.value), ['request reply', 'request replies']);
+  type(t, inputs[1], 'replies');
+  assert.ok(output(t).includes('var TICKET_NOUN = ["request reply","replies"];'));
+});
+
+test('a stringMap field is rows of key and wording that emit an object', async () => {
+  const t = await openTool();
+  t.$('[data-mp-toggle="home-greeting"]').click();
+  const field = t.$('[data-mp-field="VERBS"]');
+  assert.ok(output(t).includes('var VERBS = {"Ready for approval":"to approve","Wait on client":"to send"};'));
+  field.querySelector('button.mp-map-add').click();
+  const rows = field.querySelectorAll('.mp-map-row');
+  assert.equal(rows.length, 3);
+  type(t, rows[2].querySelector('.mp-map-key'), 'Done');
+  type(t, rows[2].querySelector('.mp-map-value'), 'to review');
+  assert.ok(output(t).includes('"Done":"to review"'));
+  rows.forEach((row) => type(t, row.querySelector('.mp-map-key'), ''));
+  assert.ok(output(t).includes('var VERBS = {};'));
+});
+
+test('the three snippets from the October 2026 contribution render with their defaults', async () => {
+  const t = await openTool();
+  ['home-greeting', 'welcome-tour', 'nav-help-box'].forEach((id) => t.$('[data-mp-toggle="' + id + '"]').click());
+  const out = output(t);
+  assert.ok(out.includes('var RETAINER_FIELD = "RetainerHours";'));
+  assert.ok(out.includes('var WEBHOOK_URL = "";'));
+  assert.ok(out.includes('var TOUR_LINK = "Replay the welcome tour";'));
+  assert.ok(out.includes('var HOME_CARDS = [["greeting"]];'));
+  assert.deepEqual(t.errors, []);
+});

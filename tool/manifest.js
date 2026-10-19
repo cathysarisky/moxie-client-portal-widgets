@@ -17,7 +17,10 @@
     'home-recent': 'Recently updated card',
     'home-requests': 'Requests card',
     'home-projects': 'Projects card',
-    'home-billing': 'Billing card'
+    'home-billing': 'Billing card',
+    'nav-help-box': 'Need help? box',
+    'welcome-tour': 'Welcome tour',
+    'home-greeting': 'Greeting band'
   };
 
   function snippet(id, description, card, settings, internal) {
@@ -65,6 +68,59 @@
         ] },
       { name: 'OTHER_LABEL', type: 'text', label: 'Heading for other links',
         help: 'Heading for booking links that match no group. Leave empty to show them last without a heading.' }
+    ]),
+    snippet('nav-help-box', 'Adds a "Need help?" box under the menu links, with a link to the help desk.', null, [
+      { name: 'TITLE', type: 'text', label: 'Title' },
+      { name: 'TEXT', type: 'text', label: 'Text', help: 'A line about how quickly you reply.' },
+      { name: 'LINK', type: 'text', label: 'Link text' },
+      { name: 'LINK_PATH', type: 'text', label: 'Where the link goes', help: 'A portal page, such as /requests.' },
+      { name: 'TOUR_LINK', type: 'text', label: 'Replay-the-tour link text',
+        help: 'Shown only when the Welcome tour is on too. Leave empty to hide it.' },
+      { name: 'LINK_COLOR', type: 'text', label: 'Link colour',
+        help: 'A CSS colour such as #F4B4A8. The default follows the menu\'s own text colour.' }
+    ]),
+    snippet('welcome-tour', 'Opens a welcome modal, with an optional video, on a client\'s first visit, and can send login events to a webhook.', null, [
+      { name: 'WEBHOOK_URL', type: 'text', label: 'Webhook address for login events',
+        help: 'Where login events go, for example a Make or Zapier webhook. Leave empty to send nothing.' },
+      { name: 'ONBOARDED_FIELD', type: 'text', label: 'Custom field your automation sets after the first login',
+        help: 'The mapping key of the client custom field your automation sets to "Yes".' },
+      { name: 'VIDEO_URL', type: 'text', label: 'Video embed address',
+        help: 'For example https://www.tella.tv/video/XXXXXXXX/embed. Leave empty for a text-only welcome.' },
+      { name: 'VIDEO_RATIO', type: 'text', label: 'Video height as a percentage of its width',
+        help: '56.25% for 16:9. Tella and Loom embed codes include it as the wrapper\'s padding-bottom.' },
+      { name: 'EYEBROW', type: 'text', label: 'Small line above the title' },
+      { name: 'TITLE', type: 'text', label: 'Title' },
+      { name: 'TEXT', type: 'text', label: 'Text' },
+      { name: 'BUTTON', type: 'text', label: 'Button text' },
+      { name: 'SKIP', type: 'text', label: 'Skip link text' },
+      { name: 'SHOW_TOUR', type: 'boolean', label: 'Show the welcome modal',
+        help: 'Turn off to send the webhook events but never show the modal.' }
+    ]),
+    snippet('home-greeting', 'A full-width band at the top of Home: a greeting, what\'s waiting on the client, the next meeting and a progress bar per project.', 'greeting', [
+      { name: 'HEADLINE', type: 'text', label: 'Headline', help: '{name} is the viewer\'s first name.' },
+      { name: 'EMPTY_HEADLINE', type: 'text', label: 'Headline when nothing is waiting', help: '{name} is the viewer\'s first name.' },
+      { name: 'EMPTY_TEXT', type: 'text', label: 'Text when nothing is waiting' },
+      { name: 'PRIMARY', type: 'text', label: 'First button', help: 'Scrolls to the Waiting on you card.' },
+      { name: 'PRIMARY_EMPTY', type: 'text', label: 'First button when nothing is waiting', help: 'Opens Projects.' },
+      { name: 'SECONDARY', type: 'text', label: 'Second button' },
+      { name: 'SCHEDULE_PATH', type: 'text', label: 'Where the second button goes', help: 'A portal page, such as /meetings/schedulers.' },
+      { name: 'PANEL_TITLE', type: 'text', label: 'Panel title' },
+      { name: 'NO_CALL', type: 'text', label: 'Text when no call is booked' },
+      { name: 'PICK_TIME', type: 'text', label: 'Pick-a-time link text' },
+      { name: 'VERBS', type: 'stringMap', label: 'How each waiting status reads', keyLabel: 'Task status', valueLabel: 'Wording',
+        help: 'For each task status that means the client needs to act, the words used in the sentence, as in "2 to approve".' },
+      { name: 'VERB_DEFAULT', type: 'text', label: 'Wording for any other waiting status' },
+      { name: 'TICKET_NOUN', type: 'pair', label: 'What a waiting request is called', parts: ['One', 'Several'] },
+      { name: 'RETAINER_FIELD', type: 'text', label: 'Custom field holding a monthly hours cap',
+        help: 'The mapping key of the client custom field. Clients without a value get no hours bar.' },
+      { name: 'RETAINER_TYPES', type: 'stringList', label: 'Project types counted as retainers',
+        help: 'One per line. With a cap set, their projects share one hours bar.' },
+      { name: 'HIDE_HEADING', type: 'boolean', label: 'Hide the portal\'s own Home heading' },
+      { name: 'HIDE_WELCOME', type: 'boolean', label: 'Hide the portal\'s welcome banner' },
+      { name: 'BAND_BACKGROUND', type: 'text', label: 'Band colour', help: 'A CSS colour. The default follows the menu colour.' },
+      { name: 'BAND_TEXT', type: 'text', label: 'Band text colour' },
+      { name: 'ACCENT', type: 'text', label: 'Button and bar colour', help: 'The default follows the portal\'s accent colour.' },
+      { name: 'ACCENT_TEXT', type: 'text', label: 'Button text colour' }
     ]),
     snippet('home-waiting', 'Home card listing the tasks and requests that are waiting on the client.', 'waiting', [
       { name: 'TITLE', type: 'text', label: 'Card title' },
@@ -125,7 +181,8 @@
       'home-recent': 'recent',
       'home-requests': 'requests',
       'home-projects': 'projects',
-      'home-billing': 'billing'
+      'home-billing': 'billing',
+      'home-greeting': 'greeting'
     }
   };
 }));

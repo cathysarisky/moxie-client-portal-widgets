@@ -25,6 +25,7 @@ test('the page boots in jsdom without errors', async () => {
   const t = await openTool();
   assert.match(t.$('h1').textContent, /Moxie/);
   assert.ok(t.$('header a[href*="github.com"]'), 'the header links to the repository');
+  assert.ok(t.$('footer').textContent.includes('Created by Cathy Sarisky (Spectral Web Services), with contributions from molli-beep and TaKenda'), 'credit line in the footer');
   assert.ok(t.$('#mp-output'));
   ['mp-settings-bar', 'mp-messages', 'mp-parent', 'mp-snippets', 'mp-home-layout',
     'mp-output-section', 'mp-problems', 'mp-load-json', 'mp-save-json', 'mp-paste-open',
