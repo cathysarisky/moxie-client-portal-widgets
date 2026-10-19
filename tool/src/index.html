@@ -1,0 +1,46 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Moxie portal snippets: configuration tool</title>
+<!-- inline:styles.css -->
+</head>
+<body>
+<header>
+  <h1>Moxie portal snippets: configuration tool</h1>
+  <p><strong>None of this is a documented Moxie API</strong>, so a portal update can rename an element, a component or an endpoint and break a snippet. The whole thing might just stop working. Don't use this approach for anything mission-critical that must run, because the day might come when it just stops doing anything.</p>
+</header>
+<main>
+  <div id="mp-settings-bar">
+    <input type="file" id="mp-load-json" class="mp-hidden" accept=".json,application/json">
+    <button type="button" id="mp-load-json-button">Load settings file</button>
+    <button type="button" id="mp-save-json">Save settings file</button>
+    <button type="button" id="mp-paste-open">Paste an existing script</button>
+    <button type="button" id="mp-reset">Start over</button>
+  </div>
+  <div id="mp-messages" aria-live="polite"></div>
+  <section id="mp-parent"></section>
+  <section id="mp-snippets"></section>
+  <section id="mp-home-layout"></section>
+  <section id="mp-output-section">
+    <h2>Your script</h2>
+    <div id="mp-problems"></div>
+    <textarea id="mp-output" rows="12" readonly></textarea>
+    <p>
+      <button type="button" id="mp-copy">Copy script</button>
+      <button type="button" id="mp-download-js">Download as a file</button>
+    </p>
+    <ol>
+      <li>Copy the script above (or download it and open the file).</li>
+      <li>In Moxie, open <strong>Settings &gt; Client Portal &gt; Advanced</strong> and find the <strong>JavaScript embed code</strong> box.</li>
+      <li>Paste the script into that box, replacing anything already there, and save.</li>
+    </ol>
+  </section>
+</main>
+<!-- inline:bundle -->
+<!-- inline:manifest.js -->
+<!-- inline:generate.js -->
+<!-- inline:app.js -->
+</body>
+</html>
