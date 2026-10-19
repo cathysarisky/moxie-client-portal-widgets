@@ -206,12 +206,14 @@ function refresh(t) {
   type(t, t.$('[data-mp-field="CLIENT_FILTER"] .mp-filter-key'), '');
 }
 
-// Uses settings with no value shape (HOME_CARDS, GROUPS, RENAMES): shaping a list already
-// builds a new array, which would hide a missing clone.
+// Uses values that reach the form state unshaped (the blank form's WAITING_STATUSES, a new
+// copy's GROUPS): shaping builds a new value, and the Home layout rebuilds HOME_CARDS, either
+// of which would hide a missing clone. Loaded settings are all shaped; that half guards
+// against a shape that hands its input back.
 test('settings never share objects with the built-in defaults', async () => {
   const fresh = await openTool();
   fresh.$('[data-mp-toggle="schedule-groups"]').click();
-  fresh.window.MoxiePortalToolBundle.parent.defaults.HOME_CARDS.push(['shared-parent-default']);
+  fresh.window.MoxiePortalToolBundle.parent.defaults.WAITING_STATUSES.push('shared-parent-default');
   fresh.window.MoxiePortalToolManifest.snippets.find((s) => s.id === 'schedule-groups')
     .settings.find((d) => d.name === 'GROUPS').formDefault[0].starts = 'Shared form default';
   refresh(fresh);
@@ -222,7 +224,7 @@ test('settings never share objects with the built-in defaults', async () => {
     storage: { moxiePortalTool: 1, parent: {}, snippets: [{ id: 'nav-rename', settings: {} }] }
   });
   loaded.window.MoxiePortalToolBundle.snippets['nav-rename'].defaults.RENAMES.Meetings.label = 'Shared label';
-  loaded.window.MoxiePortalToolBundle.parent.defaults.HOME_CARDS.push(['shared-loaded-default']);
+  loaded.window.MoxiePortalToolBundle.parent.defaults.WAITING_STATUSES.push('shared-loaded-default');
   refresh(loaded);
   assert.ok(!output(loaded).includes('Shared label'), 'fullConfig snippet');
   assert.ok(!output(loaded).includes('shared-loaded-default'), 'fullConfig parent');
@@ -341,4 +343,190 @@ test('settings from a newer tool are kept until the user changes something', asy
   assert.deepEqual(stored(t), { moxiePortalTool: 2 });
   t.$('[data-mp-toggle="nav-tasks-link"]').click();
   assert.equal(stored(t).moxiePortalTool, 1);
+});
+
+function radio(field, choice) {
+  return field.querySelector('input[type="radio"][value="' + choice + '"]');
+}
+
+function choose(t, select, value) {
+  select.value = value;
+  select.dispatchEvent(new t.window.Event('change', { bubbles: true }));
+}
+
+test('logo radios map to the snippet\'s values', async () => {
+  const t = await openTool();
+  t.$('[data-mp-toggle="logo"]').click();
+  const field = t.$('[data-mp-field="LOGO_CHANGE"]');
+  const url = field.querySelector('input[type="url"]');
+  assert.equal(radio(field, 'hide').checked, true);
+  assert.ok(output(t).includes('var LOGO_CHANGE = "none";'));
+  assert.notEqual(url.closest('[hidden]'), null, 'the address box waits for "image"');
+  assert.equal(radio(field, 'same'), null);
+  radio(field, 'image').click();
+  assert.equal(url.closest('[hidden]'), null);
+  type(t, url, 'https://x.test/l.png');
+  assert.ok(output(t).includes('var LOGO_CHANGE = "https://x.test/l.png";'));
+  assert.equal(t.$('#mp-problems').textContent, '');
+  type(t, url, 'logo.png');
+  assert.match(t.$('#mp-problems').textContent, /1 /);
+  assert.ok(output(t).includes('var LOGO_CHANGE = "logo.png";'));
+  assert.match(field.querySelector('.mp-problem').textContent, /starting with https:\/\//);
+  assert.equal(url.getAttribute('aria-invalid'), 'true');
+  radio(field, 'keep').click();
+  assert.ok(output(t).includes('var LOGO_CHANGE = "";'));
+  assert.equal(t.$('#mp-problems').textContent, '');
+  const collapsed = t.$('[data-mp-field="LOGO_COLLAPSED"]');
+  assert.equal(radio(collapsed, 'same').checked, true);
+  assert.ok(output(t).includes('var LOGO_COLLAPSED = null;'));
+  radio(collapsed, 'hide').click();
+  assert.ok(output(t).includes('var LOGO_COLLAPSED = "none";'));
+  assert.deepEqual(t.errors, []);
+});
+
+test('renames rows build the object', async () => {
+  const t = await openTool();
+  t.$('[data-mp-toggle="nav-rename"]').click();
+  const field = t.$('[data-mp-field="RENAMES"]');
+  const rows = () => field.querySelectorAll('[data-mp-row]');
+  assert.equal(rows().length, 1);
+  assert.equal(rows()[0].querySelector('.mp-rename-name').value, 'Meetings');
+  assert.equal(rows()[0].querySelector('.mp-rename-label').value, 'Schedule time');
+  assert.equal(rows()[0].querySelector('select').value, 'calendar');
+  field.querySelector('[data-mp-add-row]').click();
+  const added = rows()[1];
+  const name = added.querySelector('.mp-rename-name');
+  assert.equal(t.document.activeElement, name);
+  const suggestions = t.document.getElementById(name.getAttribute('list'));
+  assert.deepEqual(Array.from(suggestions.options).map((o) => o.value),
+    ['Home', 'Projects', 'Meetings', 'Requests', 'Invoices', 'Files', 'Time']);
+  type(t, name, 'Requests');
+  type(t, added.querySelector('.mp-rename-label'), 'Help desk');
+  assert.equal(added.querySelector('select').value, '');
+  assert.ok(output(t).includes(
+    'var RENAMES = {"Meetings":{"label":"Schedule time","icon":"calendar"},"Requests":{"label":"Help desk"}};'));
+
+  const select = added.querySelector('select');
+  const svg = added.querySelector('textarea');
+  assert.notEqual(svg.closest('[hidden]'), null);
+  choose(t, select, select.options[select.options.length - 1].value);
+  assert.equal(svg.closest('[hidden]'), null);
+  type(t, svg, '<circle cx="12" cy="12" r="9"/>');
+  assert.ok(output(t).includes('"Requests":{"label":"Help desk","icon":"<circle cx=\\"12\\" cy=\\"12\\" r=\\"9\\"/>"}'));
+
+  rows()[0].querySelector('[data-mp-remove-row]').click();
+  assert.equal(rows().length, 1);
+  assert.equal(t.document.activeElement, rows()[0].querySelector('.mp-rename-name'));
+  assert.ok(output(t).includes('var RENAMES = {"Requests":'));
+  assert.equal(rows()[0].querySelector('select').value, select.value, 'the custom choice survives a redraw');
+  assert.deepEqual(t.errors, []);
+});
+
+test('groups rows build the array and flag empty starts', async () => {
+  const t = await openTool();
+  t.$('[data-mp-toggle="schedule-groups"]').click();
+  assert.ok(output(t).includes('Asynchronous work on your site'));
+  const field = t.$('[data-mp-field="GROUPS"]');
+  const rows = () => field.querySelectorAll('[data-mp-row]');
+  assert.equal(rows().length, 2);
+  field.querySelector('[data-mp-add-row]').click();
+  let row = rows()[2];
+  const starts = row.querySelector('.mp-group-starts');
+  assert.equal(t.document.activeElement, starts);
+  type(t, starts, 'Retainer:');
+  type(t, row.querySelector('[data-mp-field="onlyFor"] .mp-filter-key'), 'ClientType');
+  type(t, row.querySelector('[data-mp-field="onlyFor"] .mp-filter-value'), 'Retainer');
+  assert.ok(output(t).includes('{"starts":"Retainer:","onlyFor":{"ClientType":"Retainer"}}'));
+  assert.equal(t.$('#mp-problems').textContent, '');
+  type(t, starts, '');
+  assert.match(t.$('#mp-problems').textContent, /1 /);
+  assert.match(row.querySelector('.mp-problem').textContent, /start of the link names/);
+  assert.equal(starts.getAttribute('aria-invalid'), 'true');
+
+  row.querySelector('[data-mp-move="up"]').click();
+  row = rows()[1];
+  assert.equal(t.document.activeElement, row.querySelector('[data-mp-move="up"]'));
+  assert.equal(row.querySelector('.mp-group-starts').value, '');
+  assert.notEqual(row.querySelector('.mp-problem'), null, 'the problem moves with its group');
+  const out = output(t);
+  assert.ok(out.indexOf('{"starts":"","onlyFor":{"ClientType":"Retainer"}}') < out.indexOf('"starts":"Meeting:"'));
+  assert.equal(rows()[0].querySelector('[data-mp-move="up"]').disabled, true);
+  assert.equal(rows()[2].querySelector('[data-mp-move="down"]').disabled, true);
+
+  row.querySelector('[data-mp-remove-row]').click();
+  assert.equal(rows().length, 2);
+  assert.equal(t.document.activeElement, rows()[1].querySelector('.mp-group-starts'));
+  assert.equal(t.$('#mp-problems').textContent, '');
+  assert.ok(!output(t).includes('Retainer'));
+  assert.deepEqual(t.errors, []);
+});
+
+test('home layout follows the cards that are on, and lists a card once', async () => {
+  const t = await openTool();
+  const section = t.$('#mp-home-layout');
+  const layout = () => t.$$('#mp-home-layout [data-mp-card]').map((n) => n.getAttribute('data-mp-card'));
+  const item = (card) => t.$('#mp-home-layout [data-mp-card="' + card + '"]');
+  const share = (card) => item(card).querySelector('input[type="checkbox"]');
+  const homeCards = (text) => assert.ok(output(t).includes('var HOME_CARDS = ' + text + ';'), text);
+  assert.equal(section.hidden, true);
+
+  t.$('[data-mp-toggle="home-waiting"]').click();
+  t.$('[data-mp-add-copy="home-waiting"]').click();
+  assert.equal(section.hidden, false);
+  assert.deepEqual(layout(), ['waiting']);
+  assert.match(item('waiting').textContent, /Waiting on you card/);
+  homeCards('[["waiting"]]');
+
+  t.$('[data-mp-toggle="home-billing"]').click();
+  assert.deepEqual(layout(), ['waiting', 'billing']);
+  homeCards('[["waiting"],["billing"]]');
+  assert.equal(share('waiting').disabled, true);
+  share('billing').click();
+  homeCards('[["waiting","billing"]]');
+
+  item('billing').querySelector('[data-mp-move="up"]').click();
+  homeCards('[["billing","waiting"]]');
+  assert.deepEqual(layout(), ['billing', 'waiting']);
+  assert.equal(share('billing').disabled, true);
+  assert.equal(share('billing').checked, false);
+  assert.equal(share('waiting').checked, true);
+  assert.equal(t.document.activeElement, item('billing').querySelector('[data-mp-move="down"]'));
+  assert.deepEqual(stored(t).parent.HOME_CARDS, [['billing', 'waiting']]);
+
+  t.window.confirm = () => true;
+  t.$('[data-mp-toggle="home-waiting"]').click();
+  homeCards('[["billing"]]');
+  assert.deepEqual(layout(), ['billing']);
+  t.$('[data-mp-toggle="home-billing"]').click();
+  assert.equal(section.hidden, true);
+  homeCards('[]');
+  assert.deepEqual(t.errors, []);
+});
+
+test('structured settings load from storage and survive wrong types', async () => {
+  const t = await openTool({
+    storage: {
+      moxiePortalTool: 1,
+      parent: { HOME_CARDS: [['recent', 'nope'], 'waiting'] },
+      snippets: [
+        { id: 'logo', settings: { LOGO_CHANGE: 'https://x.test/a.png', LOGO_COLLAPSED: { a: 1 } } },
+        { id: 'schedule-groups', settings: { GROUPS: ['Meeting:', 5, { starts: 'A', text: 7, notFor: 'TNC' }] } },
+        { id: 'nav-rename', settings: { RENAMES: { Time: { icon: 'history', label: 3 }, ' ': {} } } },
+        { id: 'home-waiting', settings: {} },
+        { id: 'home-recent', settings: {} }
+      ]
+    }
+  });
+  assert.deepEqual(t.errors, []);
+  const out = output(t);
+  assert.ok(out.includes('var LOGO_CHANGE = "https://x.test/a.png";'));
+  assert.ok(out.includes('var LOGO_COLLAPSED = "none";'));
+  assert.equal(t.$('[data-mp-field="LOGO_CHANGE"] input[type="url"]').value, 'https://x.test/a.png');
+  assert.equal(radio(t.$('[data-mp-field="LOGO_CHANGE"]'), 'image').checked, true);
+  assert.equal(radio(t.$('[data-mp-field="LOGO_COLLAPSED"]'), 'hide').checked, true);
+  assert.ok(out.includes('var GROUPS = [{"starts":"Meeting:"},{"starts":"A"}];'));
+  assert.equal(t.$$('[data-mp-field="GROUPS"] [data-mp-row]').length, 2);
+  assert.ok(out.includes('var RENAMES = {"Time":{"icon":"history"}};'));
+  assert.ok(out.includes('var HOME_CARDS = [["recent"],["waiting"]];'));
+  assert.equal(t.$('#mp-problems').textContent, '');
 });

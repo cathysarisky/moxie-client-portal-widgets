@@ -55,7 +55,28 @@
     return value.filter(function (item) { return typeof item === 'string'; });
   }
 
-  // The value shape of each simple type. A value of the wrong type (a hand-edited file,
+  // Text that is empty or only spaces counts as left out.
+  function filled(value) {
+    return typeof value === 'string' && value.trim() !== '';
+  }
+
+  // A group as the snippet reads it: starts first, the optional parts only when filled in.
+  function tidyGroup(group) {
+    var out = { starts: typeof group.starts === 'string' ? group.starts : '' };
+    if (filled(group.text)) out.text = group.text;
+    if (group.onlyFor) out.onlyFor = group.onlyFor;
+    if (group.notFor) out.notFor = group.notFor;
+    return out;
+  }
+
+  function tidyRename(spec) {
+    var out = {};
+    if (filled(spec.label)) out.label = spec.label;
+    if (filled(spec.icon)) out.icon = spec.icon;
+    return out;
+  }
+
+  // The value shape of each type. A value of the wrong type (a hand-edited file,
   // damaged storage) becomes the type's empty value, so the form can always show it.
   var shapes = {
     text: function (value) { return typeof value === 'string' ? value : ''; },
@@ -77,7 +98,32 @@
         out[key] = String(v);
       });
       return out;
-    }
+    },
+    // 'none' hides the logo, a web address shows that image, '' keeps Moxie's, null follows the other logo.
+    logo: function (value) { return typeof value === 'string' || value === null ? value : 'none'; },
+    renames: function (value) {
+      var out = {};
+      if (!isPlainObject(value)) return out;
+      Object.keys(value).forEach(function (name) {
+        if (!name.trim()) return;
+        out[name.trim()] = tidyRename(isPlainObject(value[name]) ? value[name] : {});
+      });
+      return out;
+    },
+    // A plain string is a group with only a start, as the snippet allows.
+    groups: function (value) {
+      if (!Array.isArray(value)) return [];
+      var out = [];
+      value.forEach(function (entry) {
+        if (typeof entry === 'string') out.push({ starts: entry });
+        else if (isPlainObject(entry)) {
+          out.push(tidyGroup({ starts: entry.starts, text: entry.text,
+            onlyFor: shapes.filter(entry.onlyFor), notFor: shapes.filter(entry.notFor) }));
+        }
+      });
+      return out;
+    },
+    homeCards: function (value) { return Array.isArray(value) ? value : []; }
   };
 
   function shapeAll(defs, values) {
@@ -256,6 +302,115 @@
     return row;
   }
 
+  function button(text) {
+    var node = el('button', 'mp-small', text);
+    node.type = 'button';
+    return node;
+  }
+
+  // One control inside a row or choice, with its own small label.
+  function part(text, control, className) {
+    var box = el('div', className);
+    control.id = nextId();
+    var label = el('label', 'mp-sublabel', text);
+    label.htmlFor = control.id;
+    box.appendChild(label);
+    box.appendChild(control);
+    return box;
+  }
+
+  // Up and down buttons for row i of n; move(by) moves it by -1 or 1. what names the row.
+  function moveButtons(i, n, what, move) {
+    var box = el('div', 'mp-row-buttons');
+    [['up', '↑', -1], ['down', '↓', 1]].forEach(function (spec) {
+      var node = button(spec[1]);
+      node.setAttribute('data-mp-move', spec[0]);
+      node.setAttribute('aria-label', 'Move ' + what + ' ' + spec[0]);
+      node.disabled = spec[2] < 0 ? i === 0 : i === n - 1;
+      node.addEventListener('click', function () { move(spec[2]); });
+      box.appendChild(node);
+    });
+    return box;
+  }
+
+  // After a move, focus goes to the moved row's same button, or its other one at the top or bottom.
+  function moveFocus(row, by) {
+    var same = row.querySelector('[data-mp-move="' + (by < 0 ? 'up' : 'down') + '"]');
+    return same.disabled ? row.querySelector('[data-mp-move="' + (by < 0 ? 'down' : 'up') + '"]') : same;
+  }
+
+  // Repeatable rows over opts.drafts, one plain object per row that the editor owns and edits.
+  // opts.draw(draft, i, buttons) builds a row; buttons(what, movable) makes its move and remove
+  // buttons. Adding, moving or removing a row redraws the rows, reports the value with
+  // opts.emit(), and focuses the nearest row's control matching opts.first, or the add button.
+  function rowList(opts) {
+    var drafts = opts.drafts;
+    var body = el('div');
+    var rows = el('div', 'mp-rows');
+    var add = button(opts.addText);
+    add.setAttribute('data-mp-add-row', '');
+    function changed(focus) {
+      draw();
+      opts.emit();
+      focus().focus();
+    }
+    function firstIn(row) {
+      return row ? row.querySelector(opts.first) : add;
+    }
+    function buttonsFor(i) {
+      return function (what, movable) {
+        var box = movable ? moveButtons(i, drafts.length, what, function (by) {
+          var moved = drafts[i];
+          drafts[i] = drafts[i + by];
+          drafts[i + by] = moved;
+          changed(function () { return moveFocus(rows.children[i + by], by); });
+        }) : el('div', 'mp-row-buttons');
+        var remove = button('Remove');
+        remove.setAttribute('data-mp-remove-row', '');
+        remove.setAttribute('aria-label', 'Remove ' + what);
+        remove.addEventListener('click', function () {
+          drafts.splice(i, 1);
+          changed(function () { return firstIn(rows.children[i] || rows.children[i - 1]); });
+        });
+        box.appendChild(remove);
+        return box;
+      };
+    }
+    function draw() {
+      clear(rows);
+      drafts.forEach(function (draft, i) {
+        var row = opts.draw(draft, i, buttonsFor(i));
+        row.setAttribute('data-mp-row', '');
+        rows.appendChild(row);
+      });
+    }
+    add.addEventListener('click', function () {
+      drafts.push(opts.blank());
+      changed(function () { return firstIn(rows.lastChild); });
+    });
+    draw();
+    body.appendChild(rows);
+    body.appendChild(add);
+    return body;
+  }
+
+  var BUILT_IN_LINKS = ['Home', 'Projects', 'Meetings', 'Requests', 'Invoices', 'Files', 'Time'];
+  // The icon select's value for "Custom SVG": never an icon name, which is a plain identifier.
+  var CUSTOM_ICON = '(custom)';
+
+  // 'listChecks' reads as 'List checks'.
+  function iconName(icon) {
+    var words = icon.replace(/([A-Z])/g, ' $1').toLowerCase();
+    return words.charAt(0).toUpperCase() + words.slice(1);
+  }
+
+  function cardName(card) {
+    for (var i = 0; i < manifest.snippets.length; i++) {
+      if (manifest.snippets[i].card === card) return manifest.snippets[i].name;
+    }
+    return card;
+  }
+
   // Each editor first puts its value into its type's shape, so a wrong type never throws.
   var editors = {
     text: function (def, value, onChange) {
@@ -324,17 +479,192 @@
       body.appendChild(rows);
       body.appendChild(add);
       return grouped(def, body);
+    },
+
+    // Hide, show an image from a web address, keep Moxie's, or (with sameAs) follow the other logo.
+    // checks.logo flags an address that is not a full one.
+    logo: function (def, value, onChange) {
+      var current = shapes.logo(value);
+      var chosen = current === null ? (def.sameAs ? 'same' : 'keep')
+        : current === 'none' ? 'hide' : current === '' ? 'keep' : 'image';
+      var body = el('div', 'mp-choices');
+      var group = nextId();
+      var radios = {};
+      var url = textInput(chosen === 'image' ? current : '', 'url');
+      url.placeholder = 'https://example.com/logo.png';
+      var urlBox = part('Web address of the image', url, 'mp-logo-url');
+      urlBox.setAttribute('data-mp-part', 'url');
+      urlBox.hidden = chosen !== 'image';
+      // An image with no address yet keeps Moxie's logo ('') until one is typed.
+      function emit() {
+        urlBox.hidden = !radios.image.checked;
+        if (radios.hide.checked) onChange('none');
+        else if (radios.image.checked) onChange(url.value.trim());
+        else if (radios.keep.checked) onChange('');
+        else onChange(null);
+      }
+      var choices = [['hide', 'Hide it'], ['image', 'Show my own image'], ['keep', 'Keep Moxie\'s own image']];
+      if (def.sameAs) choices.unshift(['same', 'Same as the expanded logo']);
+      choices.forEach(function (choice) {
+        var input = el('input');
+        input.type = 'radio';
+        input.name = group;
+        input.value = choice[0];
+        input.checked = choice[0] === chosen;
+        input.addEventListener('change', emit);
+        radios[choice[0]] = input;
+        var label = el('label', 'mp-choice');
+        label.appendChild(input);
+        label.appendChild(document.createTextNode(choice[1]));
+        body.appendChild(label);
+        if (choice[0] === 'image') body.appendChild(urlBox);
+      });
+      url.addEventListener('input', emit);
+      return grouped(def, body);
+    },
+
+    // Rows of built-in link, new name and icon. A row with no link name is left out.
+    renames: function (def, value, onChange, ctx) {
+      var icons = ctx.bundle.icons;
+      var renames = shapes.renames(value);
+      var drafts = Object.keys(renames).map(function (name) {
+        var icon = renames[name].icon || '';
+        return { name: name, label: renames[name].label || '', icon: icon, custom: icon !== '' && icons.indexOf(icon) < 0 };
+      });
+      var suggestions = el('datalist');
+      suggestions.id = nextId();
+      BUILT_IN_LINKS.forEach(function (name) {
+        var option = el('option');
+        option.value = name;
+        suggestions.appendChild(option);
+      });
+      var options = [['', 'Keep Moxie\'s icon']]
+        .concat(icons.map(function (icon) { return [icon, iconName(icon)]; }), [[CUSTOM_ICON, 'Custom SVG']]);
+      function emit() {
+        var out = {};
+        drafts.forEach(function (d) {
+          if (filled(d.name)) out[d.name.trim()] = tidyRename(d);
+        });
+        onChange(out);
+      }
+      function draw(d, i, buttons) {
+        var row = el('div', 'mp-row mp-rename-row');
+        var name = textInput(d.name);
+        name.className = 'mp-rename-name';
+        name.setAttribute('list', suggestions.id);
+        name.addEventListener('input', function () { d.name = name.value; emit(); });
+        var label = textInput(d.label);
+        label.className = 'mp-rename-label';
+        label.addEventListener('input', function () { d.label = label.value; emit(); });
+        var select = el('select');
+        options.forEach(function (o) {
+          var option = el('option', null, o[1]);
+          option.value = o[0];
+          select.appendChild(option);
+        });
+        select.value = d.custom ? CUSTOM_ICON : d.icon;
+        var svg = el('textarea', 'mp-code');
+        svg.rows = 2;
+        svg.value = d.custom ? d.icon : '';
+        svg.placeholder = '<circle cx="12" cy="12" r="9"/>';
+        var svgBox = part('SVG code for the icon', svg, 'mp-wide');
+        svgBox.hidden = !d.custom;
+        select.addEventListener('change', function () {
+          d.custom = select.value === CUSTOM_ICON;
+          d.icon = d.custom ? svg.value : select.value;
+          svgBox.hidden = !d.custom;
+          emit();
+        });
+        svg.addEventListener('input', function () { d.icon = svg.value; emit(); });
+        row.appendChild(part('Built-in link', name));
+        row.appendChild(part('New name', label));
+        row.appendChild(part('Icon', select));
+        row.appendChild(buttons('menu link ' + (i + 1), false));
+        row.appendChild(svgBox);
+        return row;
+      }
+      var body = rowList({
+        drafts: drafts, draw: draw, emit: emit, first: '.mp-rename-name', addText: 'Add a menu link',
+        blank: function () { return { name: '', label: '', icon: '', custom: false }; }
+      });
+      body.appendChild(suggestions);
+      return grouped(def, body);
+    },
+
+    // Groups in page order, each with its own client filters. checks.groups flags an empty start.
+    groups: function (def, value, onChange) {
+      var drafts = shapes.groups(value).map(function (g) {
+        return { starts: g.starts, text: g.text || '', onlyFor: g.onlyFor || null, notFor: g.notFor || null };
+      });
+      function emit() { onChange(drafts.map(tidyGroup)); }
+      function filterPart(g, key, label) {
+        return editors.filter({ name: key, label: label }, g[key], function (v) { g[key] = v; emit(); });
+      }
+      function draw(g, i, buttons) {
+        var row = el('fieldset', 'mp-row');
+        row.appendChild(el('legend', 'mp-sublabel', 'Group ' + (i + 1)));
+        var grid = el('div', 'mp-group-row');
+        var starts = textInput(g.starts);
+        starts.className = 'mp-group-starts';
+        starts.placeholder = 'e.g. Developer time:';
+        starts.addEventListener('input', function () { g.starts = starts.value; emit(); });
+        var startsBox = part('Link names start with', starts);
+        startsBox.setAttribute('data-mp-part', String(i));
+        var text = el('textarea');
+        text.rows = 2;
+        text.value = g.text;
+        text.addEventListener('input', function () { g.text = text.value; emit(); });
+        grid.appendChild(startsBox);
+        grid.appendChild(buttons('group ' + (i + 1), true));
+        grid.appendChild(part('Explanation under the heading', text, 'mp-wide'));
+        grid.appendChild(filterPart(g, 'onlyFor', 'Only for clients whose…'));
+        grid.appendChild(filterPart(g, 'notFor', 'Hidden from clients whose…'));
+        row.appendChild(grid);
+        return row;
+      }
+      return grouped(def, rowList({
+        drafts: drafts, draw: draw, emit: emit, first: '.mp-group-starts', addText: 'Add group',
+        blank: function () { return { starts: '', text: '', onlyFor: null, notFor: null }; }
+      }));
+    },
+
+    // The Home cards that are on (ctx.enabledCards), in page order. Moving swaps two cards'
+    // places; each place keeps its "share a row" tick, so the rows keep their shape.
+    homeCards: function (def, value, onChange, ctx) {
+      var layout = gen.homeCardsToLayout(shapes.homeCards(value), ctx.enabledCards);
+      var list = el('ol', 'mp-rows mp-layout');
+      function emit() { onChange(gen.layoutToHomeCards(layout)); }
+      function draw() {
+        clear(list);
+        layout.forEach(function (item, i) {
+          var row = el('li', 'mp-row mp-layout-row');
+          row.setAttribute('data-mp-card', item.card);
+          var name = cardName(item.card);
+          row.appendChild(el('span', 'mp-layout-name', name));
+          var share = el('input');
+          share.type = 'checkbox';
+          share.checked = !item.newRow;
+          share.disabled = i === 0;
+          share.addEventListener('change', function () { item.newRow = !share.checked; emit(); });
+          var label = el('label', 'mp-choice');
+          label.appendChild(share);
+          label.appendChild(document.createTextNode('Share a row with the card above'));
+          row.appendChild(label);
+          row.appendChild(moveButtons(i, layout.length, name, function (by) {
+            var card = item.card;
+            item.card = layout[i + by].card;
+            layout[i + by].card = card;
+            draw();
+            emit();
+            moveFocus(list.children[i + by], by).focus();
+          }));
+          list.appendChild(row);
+        });
+      }
+      draw();
+      return grouped(def, list);
     }
   };
-
-  // Types without an editor yet: the setting keeps its value and the form says so.
-  function noEditor(def) {
-    var root = el('div', 'mp-field');
-    root.setAttribute('data-mp-field', def.name);
-    root.appendChild(el('p', 'mp-label', def.label));
-    root.appendChild(el('p', 'mp-help', 'This setting can\'t be edited here yet. The paste keeps its current value.'));
-    return root;
-  }
 
   // ---------------------------------------------------------------------------
   // Structure: the parent section and one card per snippet, rebuilt by renderAll().
@@ -354,8 +684,7 @@
     var ctx = { values: values, bundle: bundle, manifest: manifest };
 
     function build(def) {
-      var editor = editors[def.type] || noEditor;
-      var node = editor(def, values[def.name], function (value) { update(def, value); }, ctx);
+      var node = editors[def.type](def, values[def.name], function (value) { update(def, value); }, ctx);
       node.setAttribute('data-mp-path', path + '.' + def.name);
       return node;
     }
@@ -450,9 +779,37 @@
     manifest.snippets.forEach(function (def) { root.appendChild(renderCard(def)); });
   }
 
+  // The Home cards of the snippets that are on, each once, in manifest order.
+  function enabledCards() {
+    var cards = [];
+    manifest.snippets.forEach(function (def) {
+      if (def.card && cards.indexOf(def.card) < 0 && copiesOf(def.id).length) cards.push(def.card);
+    });
+    return cards;
+  }
+
+  // The layout lists exactly the cards that are on, so every rebuild first brings the setting
+  // up to date: a card just turned on joins at the end in its own row, one turned off drops out.
+  function renderHomeLayout() {
+    var root = document.getElementById('mp-home-layout');
+    var def = manifest.parent.settings.filter(function (d) { return d.type === 'homeCards'; })[0];
+    var values = state.config.parent;
+    var cards = enabledCards();
+    values[def.name] = gen.layoutToHomeCards(gen.homeCardsToLayout(shapes.homeCards(values[def.name]), cards));
+    clear(root);
+    root.hidden = !cards.length;
+    if (!cards.length) return;
+    root.appendChild(el('h2', null, 'Home page layout'));
+    root.appendChild(editors.homeCards(def, values[def.name], function (value) {
+      values[def.name] = value;
+      onChange();
+    }, { values: values, bundle: bundle, manifest: manifest, enabledCards: cards }));
+  }
+
   function renderAll() {
     renderParent();
     renderSnippets();
+    renderHomeLayout();
   }
 
   // Structural actions change the list of copies and rebuild the form. The control the user
@@ -503,12 +860,27 @@
   // Output and problems
   // ---------------------------------------------------------------------------
 
-  // Checks per type: report(message) records a problem; the return value goes in the paste.
+  // Checks per type: report(message, part) records a problem, optionally with one part of the
+  // field (its data-mp-part); the return value goes in the paste.
   var checks = {
     number: function (value, fallback, report) {
       if (typeof value === 'number' && isFinite(value) && Math.floor(value) === value) return value;
       report('Needs a whole number; using the default ' + fallback);
       return fallback;
+    },
+    // Kept as typed: the snippet just shows a broken image.
+    logo: function (value, fallback, report) {
+      if (typeof value === 'string' && value !== 'none' && value !== '' && value.indexOf('http') !== 0) {
+        report('Needs a full web address starting with https://', 'url');
+      }
+      return value;
+    },
+    // Kept as typed: the snippet skips a group with no start.
+    groups: function (value, fallback, report) {
+      shapes.groups(value).forEach(function (group, i) {
+        if (!filled(group.starts)) report('Needs the start of the link names', i);
+      });
+      return value;
     }
   };
 
@@ -521,8 +893,8 @@
         var check = checks[def.type];
         if (!check) return;
         var fieldPath = path + '.' + def.name;
-        values[def.name] = check(values[def.name], defaultOf(def, defaults), function (message) {
-          problems.push({ path: fieldPath, message: message });
+        values[def.name] = check(values[def.name], defaultOf(def, defaults), function (message, part) {
+          problems.push({ path: fieldPath, part: part, message: message });
         });
       });
     }
@@ -555,10 +927,13 @@
     state.problems.forEach(function (problem) {
       var field = fields[problem.path];
       if (!field) return;
+      // A problem with one part of a field (a group, the logo's address) shows at that part.
+      var at = problem.part === undefined ? field
+        : field.querySelector('[data-mp-part="' + problem.part + '"]') || field;
       var note = el('p', 'mp-problem', problem.message);
       note.id = nextId();
-      field.appendChild(note);
-      var control = field.querySelector('input, textarea');
+      at.appendChild(note);
+      var control = at.querySelector('input, textarea');
       if (!control) return;
       control.setAttribute('aria-invalid', 'true');
       var described = control.getAttribute('aria-describedby');
