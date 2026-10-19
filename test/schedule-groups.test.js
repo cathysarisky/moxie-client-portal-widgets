@@ -171,3 +171,24 @@ test('a group with notFor is hidden from clients whose custom fields match it', 
   const { t: other } = start({ GROUPS: groups });
   assert.deepEqual(headings(other), ['Developer time', 'Meeting', 'Other']);
 });
+
+test('a group with hide is hidden from everyone, links included', () => {
+  const { t } = start({ GROUPS: ['Developer time:', { starts: 'Meeting:', hide: true }] });
+  assert.deepEqual(headings(t), ['Developer time', 'Other']);
+  assert.deepEqual(namesUnder(t, 'Other'), ['Retainer clients - an hour']);
+});
+
+test('HIDE_LINKS hides named links wherever they would appear, ignoring case and spaces', () => {
+  const { t } = start({ GROUPS: ['Developer time:', 'Meeting:'], HIDE_LINKS: ['  developer time: 3H', 'Retainer clients - an hour'] });
+  assert.deepEqual(headings(t), ['Developer time', 'Meeting']);
+  assert.deepEqual(namesUnder(t, 'Developer time'), ['1h']);
+  assert.deepEqual(namesUnder(t, 'Meeting'), ['Existing client call', 'Sync call']);
+});
+
+test('HIDE_LINKS works on its own, with no groups matching', () => {
+  const { t } = start({ GROUPS: [], HIDE_LINKS: ['Meeting: Sync call'] });
+  assert.equal(t.document.querySelector('.scheduler-grid').style.display, 'none');
+  assert.deepEqual(headings(t), ['Other']);
+  assert.deepEqual(namesUnder(t, 'Other'),
+    ['Developer time: 1h', 'Developer time: 3h', 'Meeting: Existing client call', 'Retainer clients - an hour']);
+});

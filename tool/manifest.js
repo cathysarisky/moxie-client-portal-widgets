@@ -6,6 +6,8 @@
 
   var ONLY_FOR_HELP = 'Run this only for clients whose custom fields match, for example ClientType is TNC. With several fields, all of them must match. '
     + 'It works on top of the main client filter. Leave it empty to run for every client the main filter allows.';
+  var NOT_FOR_HELP = 'Skip clients whose custom fields match, for example ClientType is Retainer. With several fields, a client is skipped only when all of them match. '
+    + 'Leave it empty to skip nobody.';
 
   var NAMES = {
     'logo': 'Logo',
@@ -32,7 +34,8 @@
       card: card,
       internal: internal || [],
       settings: settings.concat([
-        { name: 'ONLY_FOR', type: 'filter', label: 'Only for clients whose…', help: ONLY_FOR_HELP }
+        { name: 'ONLY_FOR', type: 'filter', label: 'Only for clients whose…', help: ONLY_FOR_HELP },
+        { name: 'NOT_FOR', type: 'filter', label: 'Not for clients whose…', help: NOT_FOR_HELP }
       ])
     };
   }
@@ -61,13 +64,15 @@
     ]),
     snippet('schedule-groups', 'Sorts the booking links on Meetings > Schedule now into groups by the start of their names.', null, [
       { name: 'GROUPS', type: 'groups', label: 'Booking link groups',
-        help: 'Name your booking links in Moxie with a shared start, such as "Developer time: 1 hour". Each group is that start, an optional explanation shown under the heading, and optionally which clients see it.',
+        help: 'Name your booking links in Moxie with a shared start, such as "Developer time: 1 hour". Each group is that start, an optional explanation shown under the heading, and optionally which clients see it. A hidden group keeps its links off the page for everyone.',
         formDefault: [
           { starts: 'Developer time:', text: 'Asynchronous work on your site. Leave a note when booking if you\'d like a kick-off call.' },
           { starts: 'Meeting:', text: 'Synchronous calls. Meeting time is billed, so consider a task or ticket for simple requests.' }
         ] },
       { name: 'OTHER_LABEL', type: 'text', label: 'Heading for other links',
-        help: 'Heading for booking links that match no group. Leave empty to show them last without a heading.' }
+        help: 'Heading for booking links that match no group. Leave empty to show them last without a heading.' },
+      { name: 'HIDE_LINKS', type: 'stringList', label: 'Booking links to hide',
+        help: 'One per line, each the full name of a booking link as shown in Moxie, such as "Developer time: 4 hours". These never show, whatever group they would fall under. Case and surrounding spaces are ignored.' }
     ]),
     snippet('nav-help-box', 'Adds a "Need help?" box under the menu links, with a link to the help desk.', null, [
       { name: 'TITLE', type: 'text', label: 'Title' },

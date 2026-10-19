@@ -76,7 +76,7 @@ To remove a snippet, delete its block: from its banner comment down to the line 
 
 All four are near the top of the parent script, whether you edit it in the Moxie box or in the file.
 
-**`CLIENT_FILTER`** decides which clients see any of the snippets. It maps client custom-field *mapping keys* to required values. A client passes when every entry matches; case and surrounding spaces are ignored. Each snippet can narrow this further with its own `ONLY_FOR` setting, described under [Snippets](#snippets).
+**`CLIENT_FILTER`** decides which clients see any of the snippets. It maps client custom-field *mapping keys* to required values. A client passes when every entry matches; case and surrounding spaces are ignored. Each snippet can narrow this further with its own `ONLY_FOR` and `NOT_FOR` settings, described under [Snippets](#snippets).
 
 ```js
 var CLIENT_FILTER = null;                                   // every client
@@ -120,8 +120,9 @@ Each snippet has its editable text and settings at the top of its file. Every on
 | Setting | Default | Meaning |
 |---|---|---|
 | `ONLY_FOR` | `null` | Run this snippet only for clients whose custom fields match, e.g. `{ ClientType: 'TNC' }`. It works like `CLIENT_FILTER` and applies on top of it. `null` means every client the parent allows |
+| `NOT_FOR` | `null` | Skip this snippet for clients whose custom fields match, e.g. `{ ClientType: 'Retainer' }`. With several fields, a client is skipped only when all of them match. `null` skips nobody. A snippet with both runs for clients who pass `ONLY_FOR` and do not match `NOT_FOR` |
 
-**Different looks for different clients.** Paste a snippet twice with different settings and different `ONLY_FOR` values, for example one `custom-css` block with a green menu for `{ ClientType: 'TNC' }` and another with a blue menu for `{ ClientType: 'Agency' }`. Only the copy whose filter matches the signed-in client runs. This works for every snippet, including the Home cards, as long as the two filters do not overlap.
+**Different looks for different clients.** Paste a snippet twice with different settings and different `ONLY_FOR` values, for example one `custom-css` block with a green menu for `{ ClientType: 'TNC' }` and another with a blue menu for `{ ClientType: 'Agency' }`. Only the copy whose filter matches the signed-in client runs. This works for every snippet, including the Home cards, as long as the two filters do not overlap. `NOT_FOR` covers the other common case, "everyone except": one Billing card for every client except retainers, say, with `NOT_FOR = { ClientType: 'Retainer' }`.
 
 ### logo
 
@@ -211,16 +212,19 @@ var GROUPS = [
   { starts: 'Meeting:', text: 'Synchronous calls. Meeting time is billed, so consider a task or ticket for simple requests.' },
   { starts: 'Retainer:', text: 'Booked against your retainer balance.', onlyFor: { ClientType: 'Retainer' } },
   { starts: 'Prepaid:', notFor: { ClientType: 'Retainer' } },
+  { starts: 'Internal:', hide: true },
   'Workshop:'
 ];
+var HIDE_LINKS = ['Developer time: 4 hours'];
 ```
 
-Texts sit inside double quotes when they contain an apostrophe, as in the first line above. In this example a client whose `ClientType` field is not `Retainer` never sees the Retainer group or any link whose name starts with `Retainer:`, and a retainer client never sees the Prepaid group, so one set of booking links can serve every kind of client. `notFor` with several fields hides the group only from clients who match all of them. Links in Moxie still need **Show in portal** turned on; this snippet only hides, it cannot show a link Moxie keeps off the portal.
+Texts sit inside double quotes when they contain an apostrophe, as in the first line above. In this example a client whose `ClientType` field is not `Retainer` never sees the Retainer group or any link whose name starts with `Retainer:`, and a retainer client never sees the Prepaid group, so one set of booking links can serve every kind of client. `notFor` with several fields hides the group only from clients who match all of them. `hide: true` keeps a group and its links off the page for everyone, and `HIDE_LINKS` does the same for single links named in full, wherever they would otherwise appear. Both are a quicker way to keep a few links off the portal than turning off **Show in portal** on each one in Moxie. Links in Moxie still need **Show in portal** turned on; this snippet only hides, it cannot show a link Moxie keeps off the portal.
 
 | Setting | Default | Meaning |
 |---|---|---|
-| `GROUPS` | two groups, `Developer time:` and `Meeting:`, each with an explanation | The groups in display order. Each is `{ starts: 'Developer time:', text: '...', onlyFor: { ... } }`: `starts` is how the link names begin, `text` is an optional explanation shown under the heading, `onlyFor` optionally limits the group to clients whose custom fields match, in the same form as the snippet's `ONLY_FOR`, and `notFor` hides it from clients whose fields match. A client who may not see a group sees neither the group nor its links. A plain string such as `'Meeting:'` is a group with no text and no filter. The heading is `starts` without its trailing `:` or `-`. Matching ignores case |
+| `GROUPS` | two groups, `Developer time:` and `Meeting:`, each with an explanation | The groups in display order. Each is `{ starts: 'Developer time:', text: '...', onlyFor: { ... } }`: `starts` is how the link names begin, `text` is an optional explanation shown under the heading, `onlyFor` optionally limits the group to clients whose custom fields match, in the same form as the snippet's `ONLY_FOR`, `notFor` hides it from clients whose fields match, and `hide: true` hides it from everyone. A client who may not see a group sees neither the group nor its links. A plain string such as `'Meeting:'` is a group with no text and no filter. The heading is `starts` without its trailing `:` or `-`. Matching ignores case |
 | `OTHER_LABEL` | `'Other'` | Heading for links that match no group; `''` shows them last without a heading |
+| `HIDE_LINKS` | `[]` | Full names of booking links to hide from everyone, such as `['Developer time: 4 hours']`. Matching ignores case and surrounding spaces. A hidden link never shows, whether or not its name matches a group |
 
 ### welcome-tour
 
@@ -342,12 +346,13 @@ Thank for trying out these client portal widgets.  Feedback welcome!
 
 ## Writing your own snippet
 
-A snippet is a self-contained function registered with `MoxiePortal.ready`. It runs when the viewer's client passes `CLIENT_FILTER` and the snippet's own `onlyFor` filter, if it gives one, and runs again whenever the viewer switches to another client that passes. Styles, hooks and Home cards registered during a run are removed automatically when that happens; return a function if there is anything else to undo.
+A snippet is a self-contained function registered with `MoxiePortal.ready`. It runs when the viewer's client passes `CLIENT_FILTER` and the snippet's own `onlyFor` filter, if it gives one, and does not match its `notFor` filter, if it gives one, and runs again whenever the viewer switches to another client that passes. Styles, hooks and Home cards registered during a run are removed automatically when that happens; return a function if there is anything else to undo.
 
 ```js
 (function () {
   var GREETING = 'Welcome back';
   var ONLY_FOR = null;   // or { ClientType: 'TNC' }
+  var NOT_FOR = null;    // or { ClientType: 'Retainer' }
 
   MoxiePortal.ready(function (portal) {
     portal.home.mount({
@@ -358,7 +363,7 @@ A snippet is a self-contained function registered with `MoxiePortal.ready`. It r
         return card;
       }
     });
-  }, { onlyFor: ONLY_FOR });
+  }, { onlyFor: ONLY_FOR, notFor: NOT_FOR });
 })();
 ```
 

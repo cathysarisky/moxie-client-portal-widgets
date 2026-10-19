@@ -16,6 +16,8 @@
   // Run only for clients whose custom fields match, e.g. { ClientType: 'TNC' }.
   // null means every client the parent script allows.
   var ONLY_FOR = null;
+  // Skip clients whose custom fields match, e.g. { ClientType: 'Retainer' }. null skips nobody.
+  var NOT_FOR = null;
 
   var CSS = [
     '.mp-help { box-sizing: border-box; margin: 8px 12px 12px; padding: 14px 16px; border-radius: 12px; background: rgba(255,255,255,.08); border: 1px solid rgba(255,255,255,.16); box-shadow: inset 0 1px 0 rgba(255,255,255,.14); -webkit-backdrop-filter: blur(12px); backdrop-filter: blur(12px); color: var(--portal-nav-text, inherit); display: flex; flex-direction: column; gap: 8px; text-align: left; }',
@@ -78,5 +80,5 @@
     sync();
 
     return function () { live = false; remove(); };
-  }, { onlyFor: ONLY_FOR });
+  }, { onlyFor: ONLY_FOR, notFor: NOT_FOR });
 })();

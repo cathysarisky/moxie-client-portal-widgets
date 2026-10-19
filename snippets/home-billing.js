@@ -18,6 +18,8 @@
   // Run only for clients whose custom fields match, e.g. { ClientType: 'TNC' }.
   // null means every client the parent script allows.
   var ONLY_FOR = null;
+  // Skip clients whose custom fields match, e.g. { ClientType: 'Retainer' }. null skips nobody.
+  var NOT_FOR = null;
 
   // Invoice statuses the Reports tab counts, and the subset that still owes money.
   var COUNTED = ['SENT', 'PARTIAL', 'PAID', 'WRITE-OFF'];
@@ -206,5 +208,5 @@
       name: 'billing',
       render: function () { return render(portal); }
     });
-  }, { onlyFor: ONLY_FOR });
+  }, { onlyFor: ONLY_FOR, notFor: NOT_FOR });
 })();

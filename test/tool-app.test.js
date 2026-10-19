@@ -96,6 +96,19 @@ test('adding a copy adds a second block with its own filter', async () => {
   assert.deepEqual(t.errors, []);
 });
 
+test('every snippet copy has a Not for filter that generates NOT_FOR', async () => {
+  const t = await twoCssCopies();
+  assert.equal(count(output(t), 'var NOT_FOR = null;'), 2);
+  const first = t.$$('[data-mp-snippet="custom-css"]')[0];
+  type(t, first.querySelector('[data-mp-field="NOT_FOR"] .mp-filter-key'), 'ClientType');
+  type(t, first.querySelector('[data-mp-field="NOT_FOR"] .mp-filter-value'), 'Retainer');
+  const out = output(t);
+  assert.equal(count(out, 'var NOT_FOR = {"ClientType":"Retainer"};'), 1);
+  assert.equal(count(out, 'var NOT_FOR = null;'), 1);
+  assert.ok(out.indexOf('var NOT_FOR = {"ClientType":"Retainer"};') < out.indexOf('var ONLY_FOR = {"ClientType":"Agency"};'));
+  assert.deepEqual(t.errors, []);
+});
+
 test('removing a copy', async () => {
   const t = await twoCssCopies();
   t.$$('[data-mp-snippet="custom-css"]')[1].querySelector('[data-mp-remove]').click();
@@ -519,6 +532,24 @@ test('home layout follows the cards that are on, and lists a card once', async (
   assert.deepEqual(t.errors, []);
 });
 
+test('a group can be hidden from everyone with its checkbox, and links hidden by name', async () => {
+  const t = await openTool();
+  t.$('[data-mp-toggle="schedule-groups"]').click();
+  const field = t.$('[data-mp-field="GROUPS"]');
+  const row = field.querySelectorAll('[data-mp-row]')[1];
+  const hide = row.querySelector('.mp-group-hide');
+  assert.equal(hide.type, 'checkbox');
+  assert.equal(hide.checked, false);
+  hide.click();
+  assert.ok(output(t).includes('{"starts":"Meeting:","text":"Synchronous calls. Meeting time is billed, so consider a task or ticket for simple requests.","hide":true}'));
+  hide.click();
+  assert.ok(!output(t).includes('"hide"'));
+  const links = t.$('[data-mp-field="HIDE_LINKS"] textarea');
+  type(t, links, 'Developer time: 4 hours\n\n  Meeting: Long call ');
+  assert.ok(output(t).includes('var HIDE_LINKS = ["Developer time: 4 hours","Meeting: Long call"];'));
+  assert.deepEqual(t.errors, []);
+});
+
 test('structured settings load from storage and survive wrong types', async () => {
   const t = await openTool({
     storage: {
@@ -526,7 +557,7 @@ test('structured settings load from storage and survive wrong types', async () =
       parent: { HOME_CARDS: [['recent', 'nope'], 'waiting'] },
       snippets: [
         { id: 'logo', settings: { LOGO_CHANGE: 'https://x.test/a.png', LOGO_COLLAPSED: { a: 1 } } },
-        { id: 'schedule-groups', settings: { GROUPS: ['Meeting:', 5, { starts: 'A', text: 7, notFor: 'TNC' }] } },
+        { id: 'schedule-groups', settings: { GROUPS: ['Meeting:', 5, { starts: 'A', text: 7, notFor: 'TNC', hide: 'yes' }, { starts: 'B', hide: true }], HIDE_LINKS: 'x' } },
         { id: 'nav-rename', settings: { RENAMES: { Time: { icon: 'history', label: 3 }, ' ': {} } } },
         { id: 'home-waiting', settings: {} },
         { id: 'home-recent', settings: {} }
@@ -540,8 +571,10 @@ test('structured settings load from storage and survive wrong types', async () =
   assert.equal(t.$('[data-mp-field="LOGO_CHANGE"] input[type="url"]').value, 'https://x.test/a.png');
   assert.equal(radio(t.$('[data-mp-field="LOGO_CHANGE"]'), 'image').checked, true);
   assert.equal(radio(t.$('[data-mp-field="LOGO_COLLAPSED"]'), 'hide').checked, true);
-  assert.ok(out.includes('var GROUPS = [{"starts":"Meeting:"},{"starts":"A"}];'));
-  assert.equal(t.$$('[data-mp-field="GROUPS"] [data-mp-row]').length, 2);
+  assert.ok(out.includes('var GROUPS = [{"starts":"Meeting:"},{"starts":"A"},{"starts":"B","hide":true}];'));
+  assert.ok(out.includes('var HIDE_LINKS = [];'));
+  assert.equal(t.$$('[data-mp-field="GROUPS"] [data-mp-row]').length, 3);
+  assert.equal(t.$$('[data-mp-field="GROUPS"] .mp-group-hide')[2].checked, true);
   assert.ok(out.includes('var RENAMES = {"Time":{"icon":"history"}};'));
   assert.ok(out.includes('var HOME_CARDS = [["recent"],["waiting"]];'));
   assert.equal(t.$('#mp-problems').textContent, '');

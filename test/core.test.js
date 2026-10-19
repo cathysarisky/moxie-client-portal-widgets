@@ -582,6 +582,21 @@ test('CLIENT_FILTER still gates a snippet whose own onlyFor matches', () => {
   assert.equal(blocked, 0, 'the snippet whose own filter does not match stays off');
 });
 
+test('a snippet with notFor skips clients matching it and runs for everyone else', () => {
+  const t = boot({ filter: null, customValues: [{ mappingKey: 'ClientType', value: 'Retainer' }] });
+  const log = [];
+  t.MoxiePortal.ready(() => { log.push('not retainer'); }, { notFor: { ClientType: 'retainer' } });
+  t.MoxiePortal.ready(() => { log.push('tnc only, not tier a'); }, { onlyFor: { ClientType: 'TNC' }, notFor: { Tier: 'A' } });
+  t.MoxiePortal.ready(() => { log.push('everyone'); });
+  assert.deepEqual(log, ['everyone']);
+  t.store.state.clientPortalContext.client.customValues = [{ mappingKey: 'ClientType', value: 'TNC' }, { mappingKey: 'Tier', value: 'A' }];
+  t.store.notify();
+  assert.deepEqual(log, ['everyone', 'not retainer', 'everyone']);
+  t.store.state.clientPortalContext.client.customValues = [{ mappingKey: 'ClientType', value: 'TNC' }];
+  t.store.notify();
+  assert.deepEqual(log, ['everyone', 'not retainer', 'everyone', 'not retainer', 'tnc only, not tier a', 'everyone']);
+});
+
 test('a snippet whose onlyFor stops matching is cleaned up while the others keep running', () => {
   const t = boot({ filter: null, customValues: [{ mappingKey: 'ClientType', value: 'TNC' }] });
   const log = [];

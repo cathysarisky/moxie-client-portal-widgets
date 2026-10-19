@@ -10,6 +10,8 @@
   // limits the group to clients whose custom fields match, e.g. { ClientType: 'Retainer' },
   // in the same way as ONLY_FOR below, and `notFor` hides it from clients whose fields
   // match; a client who may not see a group sees neither the group nor its links.
+  // `hide: true` hides the group and its links from everyone, which keeps a set of links
+  // out of the portal without turning off "Show in portal" on each one in Moxie.
   // Matching ignores case; the heading is `starts` without its trailing ":" or "-".
   // A plain string such as 'Meeting:' is a group with no text and no filter.
   var GROUPS = [
@@ -31,9 +33,15 @@
   // Heading for links that match none of GROUPS. They keep their full names and come
   // last. '' shows them last without a heading.
   var OTHER_LABEL = 'Other';
+  // Booking links to hide from everyone, by their full names as shown in Moxie, for example
+  // ['Developer time: 4 hours']. Matching ignores case and surrounding spaces. A hidden link
+  // never shows, whether its name matches a group or not.
+  var HIDE_LINKS = [];
   // Run only for clients whose custom fields match, e.g. { ClientType: 'TNC' }.
   // null means every client the parent script allows.
   var ONLY_FOR = null;
+  // Skip clients whose custom fields match, e.g. { ClientType: 'Retainer' }. null skips nobody.
+  var NOT_FOR = null;
 
   MoxiePortal.ready(function (portal) {
     var ID = 'mp-schedule-groups';
@@ -71,9 +79,13 @@
         prefix: prefix, key: portal.norm(prefix),
         heading: prefix.replace(/[\s:\-\u2013]+$/, ''),
         text: spec.text ? String(spec.text).trim() : '',
-        visible: allowed(spec.onlyFor) && !(spec.notFor && allowed(spec.notFor))
+        visible: spec.hide !== true && allowed(spec.onlyFor) && !(spec.notFor && allowed(spec.notFor))
       };
     }).filter(function (g) { return g.key; });
+
+    var hiddenLinks = (Array.isArray(HIDE_LINKS) ? HIDE_LINKS : []).map(function (name) {
+      return portal.norm(name);
+    }).filter(Boolean);
 
     function onPage() { return portal.router.currentRoute.path === '/meetings/schedulers'; }
 
@@ -91,15 +103,17 @@
     }
 
     // Sorts links into { heading, text, items: [{ scheduler, label }] } buckets, dropping the
-    // links of groups this client may not see; null when no link matches any group, so
-    // the page is left as the portal made it.
+    // links of groups this client may not see and the links in HIDE_LINKS; null when no link
+    // matches any group and none is hidden, so the page is left as the portal made it.
     function arrange(schedulers) {
       var buckets = groups.map(function (g) { return { heading: g.heading, text: g.text, visible: g.visible, items: [] }; });
       var other = { heading: OTHER_LABEL, items: [] };
       var matched = 0;
+      var hidden = 0;
       schedulers.forEach(function (s) {
         var name = String(s.name == null ? '' : s.name).trim();
         var lower = name.toLowerCase();
+        if (hiddenLinks.indexOf(portal.norm(name)) >= 0) { hidden++; return; }
         for (var i = 0; i < groups.length; i++) {
           if (lower.indexOf(groups[i].key) === 0) {
             var rest = name.slice(groups[i].prefix.length).trim();
@@ -110,7 +124,7 @@
         }
         other.items.push({ scheduler: s, label: name });
       });
-      if (!matched) return null;
+      if (!matched && !hidden) return null;
       var out = buckets.filter(function (b) { return b.visible && b.items.length; });
       if (other.items.length) out.push(other);
       out.forEach(function (b) {
@@ -189,5 +203,5 @@
       live = false;
       remove();
     };
-  }, { onlyFor: ONLY_FOR });
+  }, { onlyFor: ONLY_FOR, notFor: NOT_FOR });
 })();

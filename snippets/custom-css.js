@@ -15,8 +15,10 @@
   // Run only for clients whose custom fields match, e.g. { ClientType: 'TNC' }.
   // null means every client the parent script allows.
   var ONLY_FOR = null;
+  // Skip clients whose custom fields match, e.g. { ClientType: 'Retainer' }. null skips nobody.
+  var NOT_FOR = null;
 
   MoxiePortal.ready(function (portal) {
     portal.style(CSS.join('\n'));
-  }, { onlyFor: ONLY_FOR });
+  }, { onlyFor: ONLY_FOR, notFor: NOT_FOR });
 })();

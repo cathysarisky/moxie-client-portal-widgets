@@ -34,6 +34,8 @@
   // Run only for clients whose custom fields match, e.g. { ClientType: 'TNC' }.
   // null means every client the parent script allows.
   var ONLY_FOR = null;
+  // Skip clients whose custom fields match, e.g. { ClientType: 'Retainer' }. null skips nobody.
+  var NOT_FOR = null;
 
   var CSS = [
     '.mp-tour-backdrop { position: fixed; inset: 0; z-index: 9999; display: flex; align-items: center; justify-content: center; padding: 24px; background: rgba(0,0,0,.5); -webkit-backdrop-filter: blur(6px); backdrop-filter: blur(6px); }',
@@ -184,5 +186,5 @@
       if (b) removeTour(b);
       if (window.MoxiePortalTour && window.MoxiePortalTour.open === openTour) delete window.MoxiePortalTour;
     };
-  }, { onlyFor: ONLY_FOR });
+  }, { onlyFor: ONLY_FOR, notFor: NOT_FOR });
 })();

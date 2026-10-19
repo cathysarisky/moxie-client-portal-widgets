@@ -162,7 +162,7 @@
   // Registration. Works before the portal's app has been found.
   // ---------------------------------------------------------------------------
 
-  var snippets = [];   // { fn, onlyFor } for every ready() call
+  var snippets = [];   // { fn, onlyFor, notFor } for every ready() call
   var active = null;   // { cleanups: [], styles: [] } while a matching client is active
   var portal = null;   // built in start()
 
@@ -175,16 +175,19 @@
     });
   }
 
-  // ready(fn) or ready(fn, { onlyFor: { ClientType: 'TNC' } }) to narrow the client filter.
+  // ready(fn), or ready(fn, { onlyFor: { ClientType: 'TNC' } }) to narrow the client filter,
+  // or ready(fn, { notFor: { ClientType: 'Retainer' } }) to skip clients whose fields match.
   function ready(fn, options) {
     if (typeof fn !== 'function') return;
-    var snippet = { fn: fn, onlyFor: (options && options.onlyFor) || null };
+    var snippet = { fn: fn, onlyFor: (options && options.onlyFor) || null, notFor: (options && options.notFor) || null };
     snippets.push(snippet);
     if (active) runSnippet(snippet);
   }
 
   function runSnippet(snippet) {
-    if (!matches(snippet.onlyFor, portal.clientValues())) return;
+    var values = portal.clientValues();
+    if (!matches(snippet.onlyFor, values)) return;
+    if (snippet.notFor && matches(snippet.notFor, values)) return;
     var activation = active;
     try {
       var cleanup = snippet.fn(portal);

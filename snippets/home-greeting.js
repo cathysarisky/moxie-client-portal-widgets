@@ -40,6 +40,8 @@
   // Run only for clients whose custom fields match, e.g. { ClientType: 'TNC' }.
   // null means every client the parent script allows.
   var ONLY_FOR = null;
+  // Skip clients whose custom fields match, e.g. { ClientType: 'Retainer' }. null skips nobody.
+  var NOT_FOR = null;
 
   var CSS = [
     '#mp-greeting { --mp-g-bg: ' + BAND_BACKGROUND + '; --mp-g-text: ' + BAND_TEXT + '; --mp-g-accent: ' + ACCENT + '; --mp-g-accent-text: ' + ACCENT_TEXT + '; }',
@@ -286,5 +288,5 @@
         });
       }
     });
-  }, { onlyFor: ONLY_FOR });
+  }, { onlyFor: ONLY_FOR, notFor: NOT_FOR });
 })();

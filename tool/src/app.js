@@ -83,6 +83,7 @@
     if (filled(group.text)) out.text = group.text;
     if (group.onlyFor) out.onlyFor = group.onlyFor;
     if (group.notFor) out.notFor = group.notFor;
+    if (group.hide === true) out.hide = true;
     return out;
   }
 
@@ -134,7 +135,7 @@
       value.forEach(function (entry) {
         if (typeof entry === 'string') out.push({ starts: entry });
         else if (isPlainObject(entry)) {
-          out.push(tidyGroup({ starts: entry.starts, text: entry.text,
+          out.push(tidyGroup({ starts: entry.starts, text: entry.text, hide: entry.hide,
             onlyFor: shapes.filter(entry.onlyFor), notFor: shapes.filter(entry.notFor) }));
         }
       });
@@ -687,10 +688,11 @@
       return grouped(def, body);
     },
 
-    // Groups in page order, each with its own client filters. checks.groups flags an empty start.
+    // Groups in page order, each with its own client filters or hidden from everyone.
+    // checks.groups flags an empty start.
     groups: function (def, value, onChange) {
       var drafts = shapes.groups(value).map(function (g) {
-        return { starts: g.starts, text: g.text || '', onlyFor: g.onlyFor || null, notFor: g.notFor || null };
+        return { starts: g.starts, text: g.text || '', onlyFor: g.onlyFor || null, notFor: g.notFor || null, hide: g.hide === true };
       });
       function emit() { onChange(drafts.map(tidyGroup)); }
       function filterPart(g, key, label) {
@@ -713,14 +715,22 @@
         grid.appendChild(startsBox);
         grid.appendChild(buttons('group ' + (i + 1), true));
         grid.appendChild(part('Explanation under the heading', text, 'mp-wide'));
+        var hide = el('input', 'mp-group-hide');
+        hide.type = 'checkbox';
+        hide.checked = g.hide;
+        hide.addEventListener('change', function () { g.hide = hide.checked; emit(); });
+        var hideLabel = el('label', 'mp-choice mp-wide');
+        hideLabel.appendChild(hide);
+        hideLabel.appendChild(document.createTextNode('Hide this group and its links from everyone'));
+        grid.appendChild(hideLabel);
         grid.appendChild(filterPart(g, 'onlyFor', 'Only for clients whose…'));
-        grid.appendChild(filterPart(g, 'notFor', 'Hidden from clients whose…'));
+        grid.appendChild(filterPart(g, 'notFor', 'Not for clients whose…'));
         row.appendChild(grid);
         return row;
       }
       return grouped(def, rowList({
         drafts: drafts, draw: draw, emit: emit, first: '.mp-group-starts', addText: 'Add group',
-        blank: function () { return { starts: '', text: '', onlyFor: null, notFor: null }; }
+        blank: function () { return { starts: '', text: '', onlyFor: null, notFor: null, hide: false }; }
       }));
     },
 

@@ -12,6 +12,8 @@
   // Run only for clients whose custom fields match, e.g. { ClientType: 'TNC' }.
   // null means every client the parent script allows.
   var ONLY_FOR = null;
+  // Skip clients whose custom fields match, e.g. { ClientType: 'Retainer' }. null skips nobody.
+  var NOT_FOR = null;
 
   MoxiePortal.ready(function (portal) {
     var ATTR = 'data-mp-renamed';
@@ -115,5 +117,5 @@
       var marked = document.querySelectorAll('[' + ATTR + ']');
       for (var i = 0; i < marked.length; i++) marked[i].removeAttribute(ATTR);
     };
-  }, { onlyFor: ONLY_FOR });
+  }, { onlyFor: ONLY_FOR, notFor: NOT_FOR });
 })();
