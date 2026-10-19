@@ -185,6 +185,109 @@ test('defaultFrom follows its source until edited', async () => {
   assert.ok(!output(t).includes('last 3 days'));
 });
 
+test('a formDefault wins over the snippet file in a new copy', async () => {
+  const t = await openTool();
+  const toggle = () => t.$('[data-mp-toggle="schedule-groups"]').click();
+  for (let round = 0; round < 2; round++) {
+    toggle();
+    const out = output(t);
+    assert.ok(out.includes('Asynchronous work on your site'), 'round ' + round);
+    assert.ok(out.includes('"starts":"Developer time:"'), 'round ' + round);
+    assert.ok(!out.includes('reserve on my schedule'), 'round ' + round);
+    toggle();
+  }
+  const groups = t.window.MoxiePortalToolManifest.snippets
+    .find((s) => s.id === 'schedule-groups').settings.find((d) => d.name === 'GROUPS');
+  assert.equal(groups.formDefault[0].starts, 'Developer time:');
+});
+
+// Any input event regenerates the output from state.config.
+function refresh(t) {
+  type(t, t.$('[data-mp-field="CLIENT_FILTER"] .mp-filter-key'), '');
+}
+
+// Uses settings with no value shape (HOME_CARDS, GROUPS, RENAMES): shaping a list already
+// builds a new array, which would hide a missing clone.
+test('settings never share objects with the built-in defaults', async () => {
+  const fresh = await openTool();
+  fresh.$('[data-mp-toggle="schedule-groups"]').click();
+  fresh.window.MoxiePortalToolBundle.parent.defaults.HOME_CARDS.push(['shared-parent-default']);
+  fresh.window.MoxiePortalToolManifest.snippets.find((s) => s.id === 'schedule-groups')
+    .settings.find((d) => d.name === 'GROUPS').formDefault[0].starts = 'Shared form default';
+  refresh(fresh);
+  assert.ok(!output(fresh).includes('shared-parent-default'), 'emptyConfig');
+  assert.ok(!output(fresh).includes('Shared form default'), 'newCopy');
+
+  const loaded = await openTool({
+    storage: { moxiePortalTool: 1, parent: {}, snippets: [{ id: 'nav-rename', settings: {} }] }
+  });
+  loaded.window.MoxiePortalToolBundle.snippets['nav-rename'].defaults.RENAMES.Meetings.label = 'Shared label';
+  loaded.window.MoxiePortalToolBundle.parent.defaults.HOME_CARDS.push(['shared-loaded-default']);
+  refresh(loaded);
+  assert.ok(!output(loaded).includes('Shared label'), 'fullConfig snippet');
+  assert.ok(!output(loaded).includes('shared-loaded-default'), 'fullConfig parent');
+});
+
+test('stored settings of the wrong type still render', async () => {
+  const t = await openTool({ storage: { moxiePortalTool: 1, parent: { WAITING_STATUSES: 'A' }, snippets: [] } });
+  assert.equal(t.$$('[data-mp-toggle]').length, manifest.snippets.length);
+  assert.ok(output(t).length > 0);
+  assert.ok(output(t).includes('var WAITING_STATUSES = [];'));
+  assert.equal(t.$('[data-mp-field="WAITING_STATUSES"] textarea').value, '');
+  assert.deepEqual(t.errors, []);
+});
+
+test('every simple editor turns a wrong-typed value into its empty value', async () => {
+  const t = await openTool({
+    storage: {
+      moxiePortalTool: 1,
+      parent: { CLIENT_FILTER: ['x'], TICKET_WAITING_STATUSES: { a: 1 } },
+      snippets: [
+        { id: 'custom-css', settings: { CSS: 'body {}', ONLY_FOR: 'TNC' } },
+        { id: 'home-projects', settings: { TITLE: { a: 1 }, MAX_ROWS: [3] } },
+        { id: 'logo', settings: { LOGO_WIDTH: { w: 1 }, ONLY_FOR: { ClientType: { nested: 1 }, Tier: 'A' } } }
+      ]
+    }
+  });
+  assert.deepEqual(t.errors, []);
+  const out = output(t);
+  assert.ok(out.includes('var CLIENT_FILTER = null;'));
+  assert.ok(out.includes('var TICKET_WAITING_STATUSES = [];'));
+  assert.ok(out.includes('var CSS = [];'));
+  assert.ok(out.includes('var TITLE = "";'));
+  assert.ok(out.includes('var MAX_ROWS = 5;'));
+  assert.ok(out.includes('var LOGO_WIDTH = "";'));
+  assert.ok(out.includes('var ONLY_FOR = {"Tier":"A"};'));
+  assert.equal(count(out, 'var ONLY_FOR = null;'), 2);
+  assert.equal(t.$('[data-mp-field="MAX_ROWS"] input').value, '');
+  assert.match(t.$('#mp-problems').textContent, /1 /);
+});
+
+test('a form that fails to render falls back to a blank one', async () => {
+  const seed = { moxiePortalTool: 1, parent: {}, snippets: [{ id: 'nav-tasks-link', settings: { TASKS_LABEL: 'Kept' } }] };
+  const t = await openTool({
+    storage: seed,
+    beforeParse(w) {
+      // The first textarea the app creates throws, as a broken editor would.
+      const create = w.document.createElement;
+      let failed = false;
+      w.document.createElement = function (tag) {
+        if (tag === 'textarea' && !failed) {
+          failed = true;
+          throw new Error('editor failed');
+        }
+        return create.apply(this, arguments);
+      };
+    }
+  });
+  assert.deepEqual(t.errors, []);
+  assert.equal(t.$$('[data-mp-toggle]').length, manifest.snippets.length);
+  assert.equal(t.$('[data-mp-toggle="nav-tasks-link"]').checked, false);
+  assert.ok(output(t).startsWith('/* MoxiePortal settings:'));
+  assert.ok(!output(t).includes('Kept'));
+  assert.deepEqual(stored(t), seed, 'the stored settings are not overwritten');
+});
+
 test('state survives a reload', async () => {
   const t = await openTool({
     storage: {

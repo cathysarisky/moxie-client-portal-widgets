@@ -26,26 +26,75 @@
     return def.formDefault !== undefined ? def.formDefault : defaults[def.name];
   }
 
+  function isPlainObject(value) {
+    return value !== null && typeof value === 'object' && !Array.isArray(value);
+  }
+
+  // Values are JSON data. fillDefaults hands back the bundle's and manifest's own objects,
+  // so every value that enters state.config is cloned and editors may change it in place.
+  function clone(value) {
+    return JSON.parse(JSON.stringify(value));
+  }
+
+  function strings(value) {
+    if (!Array.isArray(value)) return [];
+    return value.filter(function (item) { return typeof item === 'string'; });
+  }
+
+  // The value shape of each simple type. A value of the wrong type (a hand-edited file,
+  // damaged storage) becomes the type's empty value, so the form can always show it.
+  var shapes = {
+    text: function (value) { return typeof value === 'string' ? value : ''; },
+    // An unreadable number stays as its text, so the problem shows again after a reload.
+    number: function (value) {
+      if (typeof value === 'number') return value;
+      return typeof value === 'string' ? readNumber(value) : '';
+    },
+    stringList: strings,
+    cssLines: strings,
+    size: function (value) { return typeof value === 'number' || typeof value === 'string' ? value : ''; },
+    filter: function (value) {
+      if (!isPlainObject(value)) return null;
+      var out = null;
+      Object.keys(value).forEach(function (key) {
+        var v = value[key];
+        if (!key.trim() || (typeof v !== 'string' && typeof v !== 'number')) return;
+        out = out || {};
+        out[key] = String(v);
+      });
+      return out;
+    }
+  };
+
+  function shapeAll(defs, values) {
+    defs.forEach(function (def) {
+      if (shapes[def.type]) values[def.name] = shapes[def.type](values[def.name]);
+    });
+    return values;
+  }
+
   function emptyConfig() {
     return {
       moxiePortalTool: gen.CONFIG_VERSION,
-      parent: gen.fillDefaults({}, manifest.parent.settings, bundle.parent.defaults),
+      parent: clone(gen.fillDefaults({}, manifest.parent.settings, bundle.parent.defaults)),
       snippets: []
     };
   }
 
   function newCopy(def) {
-    return { id: def.id, settings: gen.fillDefaults({}, def.settings, bundle.snippets[def.id].defaults) };
+    return { id: def.id, settings: clone(gen.fillDefaults({}, def.settings, bundle.snippets[def.id].defaults)) };
   }
 
   // Takes the output of normalizeConfig and fills every missing setting with its default.
   function fullConfig(config) {
+    var parentDefs = manifest.parent.settings;
     return {
       moxiePortalTool: gen.CONFIG_VERSION,
-      parent: gen.fillDefaults(config.parent, manifest.parent.settings, bundle.parent.defaults),
+      parent: shapeAll(parentDefs, clone(gen.fillDefaults(config.parent, parentDefs, bundle.parent.defaults))),
       snippets: config.snippets.map(function (copy) {
-        var settings = gen.fillDefaults(copy.settings, snippetDef(copy.id).settings, bundle.snippets[copy.id].defaults);
-        return { id: copy.id, settings: settings };
+        var defs = snippetDef(copy.id).settings;
+        var settings = clone(gen.fillDefaults(copy.settings, defs, bundle.snippets[copy.id].defaults));
+        return { id: copy.id, settings: shapeAll(defs, settings) };
       })
     };
   }
@@ -132,10 +181,10 @@
       .filter(function (line) { return line !== ''; });
   }
 
-  function linesArea(value, onChange) {
+  function linesArea(list, onChange) {
     var area = el('textarea');
-    area.rows = Math.max(3, (value || []).length + 1);
-    area.value = (value || []).join('\n');
+    area.rows = Math.max(3, list.length + 1);
+    area.value = list.join('\n');
     area.addEventListener('input', function () { onChange(lines(area.value)); });
     return area;
   }
@@ -176,15 +225,16 @@
     return row;
   }
 
+  // Each editor first puts its value into its type's shape, so a wrong type never throws.
   var editors = {
     text: function (def, value, onChange) {
-      var input = textInput(value);
+      var input = textInput(shapes.text(value));
       input.addEventListener('input', function () { onChange(input.value); });
       return labelled(def, input);
     },
 
     number: function (def, value, onChange) {
-      var input = textInput(value, 'number');
+      var input = textInput(shapes.number(value), 'number');
       input.step = '1';
       input.className = 'mp-short';
       input.addEventListener('input', function () { onChange(readNumber(input.value)); });
@@ -192,19 +242,19 @@
     },
 
     stringList: function (def, value, onChange) {
-      return labelled(def, linesArea(value, onChange));
+      return labelled(def, linesArea(shapes.stringList(value), onChange));
     },
 
     // No soft wrapping, so each visible line is one rule.
     cssLines: function (def, value, onChange) {
-      var area = linesArea(value, onChange);
+      var area = linesArea(shapes.cssLines(value), onChange);
       area.className = 'mp-code';
       area.wrap = 'off';
       return labelled(def, area);
     },
 
     size: function (def, value, onChange) {
-      var input = textInput(value);
+      var input = textInput(shapes.size(value));
       input.className = 'mp-short';
       input.addEventListener('input', function () { onChange(readSize(input.value)); });
       return labelled(def, input);
@@ -229,9 +279,10 @@
         else rows.replaceChild(filterRow('', '', collect, remove), row);
         collect();
       }
-      var entries = value && typeof value === 'object' ? Object.keys(value) : [];
-      if (!entries.length) rows.appendChild(filterRow('', '', collect, remove));
-      entries.forEach(function (key) { rows.appendChild(filterRow(key, value[key], collect, remove)); });
+      var filter = shapes.filter(value) || {};
+      var keys = Object.keys(filter);
+      if (!keys.length) rows.appendChild(filterRow('', '', collect, remove));
+      keys.forEach(function (key) { rows.appendChild(filterRow(key, filter[key], collect, remove)); });
       var add = el('button', 'mp-small', 'Add another field');
       add.type = 'button';
       add.addEventListener('click', function () {
@@ -480,7 +531,15 @@
     refreshOutput();
   }
 
+  // Saved settings that cannot be shown must not leave a blank page on every visit: fall back
+  // to a blank form. Storage keeps the saved settings until the user changes something.
   state.config = load();
-  renderAll();
-  refreshOutput();
+  try {
+    renderAll();
+    refreshOutput();
+  } catch (e) {
+    state.config = emptyConfig();
+    renderAll();
+    refreshOutput();
+  }
 }());
