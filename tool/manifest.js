@@ -116,7 +116,7 @@
         { name: 'TICKET_WAITING_STATUSES', type: 'stringList', label: 'Request statuses that mean the client needs to act',
           help: 'The Waiting on you card shows these requests above its tasks. Must match your ticket status names, apart from case.' },
         { name: 'HOME_CARDS', type: 'homeCards', label: 'Home card layout',
-          help: 'Each row holds one or more cards that sit side by side and stack on a phone. Order here is order on the page. A card you leave out of the layout is still shown, after the listed ones.' }
+          help: 'Each row holds one or more cards that sit side by side and stack on a phone. Order here is order on the page.' }
       ]
     },
     snippets: snippets,

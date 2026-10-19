@@ -22,8 +22,12 @@
     document.getElementById('mp-messages').appendChild(el('p', null, text));
   }
 
+  // The storage note (data-mp-lasting) stays for the whole visit; action messages come and go.
   function clearMessages() {
-    clear(document.getElementById('mp-messages'));
+    var box = document.getElementById('mp-messages');
+    Array.prototype.slice.call(box.children).forEach(function (node) {
+      if (!node.hasAttribute('data-mp-lasting')) box.removeChild(node);
+    });
   }
 
   // An action's message replaces the last action's.
@@ -36,7 +40,10 @@
   function noteStorageFailure() {
     if (storageNoted) return;
     storageNoted = true;
-    addMessage('This browser won\'t remember your settings between visits. Use Save as file to keep them.');
+    var note = el('p', null, 'This browser won\'t remember your settings between visits. '
+      + 'To keep them, use the Save settings file button.');
+    note.setAttribute('data-mp-lasting', '');
+    document.getElementById('mp-messages').appendChild(note);
   }
 
   function snippetDef(id) {
@@ -809,11 +816,15 @@
     clear(root);
     root.hidden = !cards.length;
     if (!cards.length) return;
-    root.appendChild(el('h2', null, 'Home page layout'));
-    root.appendChild(editors.homeCards(def, values[def.name], function (value) {
+    var field = editors.homeCards(def, values[def.name], function (value) {
       values[def.name] = value;
       onChange();
-    }, { values: values, bundle: bundle, manifest: manifest, enabledCards: cards }));
+    }, { values: values, bundle: bundle, manifest: manifest, enabledCards: cards });
+    // The section heading is the field's legend, so the section has one heading, not two.
+    var legend = field.querySelector('legend');
+    clear(legend);
+    legend.appendChild(el('h2', null, 'Home page layout'));
+    root.appendChild(field);
   }
 
   function renderAll() {
@@ -822,13 +833,34 @@
     renderHomeLayout();
   }
 
+  function focusOn(focus) {
+    var target = focus && focus();
+    if (target) target.focus();
+  }
+
   // Structural actions change the list of copies and rebuild the form. The control the user
   // just used is gone after the rebuild, so focus moves to what focus() returns.
   function restructure(focus) {
     renderAll();
     onChange();
-    var target = focus && focus();
-    if (target) target.focus();
+    focusOn(focus);
+  }
+
+  // Shows the settings make() returns. Settings the form cannot show (an editor throws on
+  // them) must not leave a blank page, so fallback()'s are shown instead. Saves nothing;
+  // returns whether make()'s settings are the ones showing.
+  function showConfig(make, fallback) {
+    try {
+      state.config = make();
+      renderAll();
+      refreshOutput();
+      return true;
+    } catch (e) {
+      state.config = fallback();
+      renderAll();
+      refreshOutput();
+      return false;
+    }
   }
 
   function first(selector) {
@@ -970,7 +1002,9 @@
 
   var NOT_SETTINGS_FILE = 'That file isn\'t a settings file from this tool.';
   var NEWER_FILE = 'This file was made by a newer version of the tool. Reload the page and try again.';
+  var NEWER_PASTE = 'That paste was made by a newer version of the tool. Reload the page and try again.';
   var NOT_TOOL_PASTE = 'This doesn\'t look like a paste made by this tool.';
+  var NOT_LOADED = 'Those settings couldn\'t be loaded.';
   var EDITED_PASTE = 'The box contains changes made outside this tool. They won\'t be in the new paste. '
     + 'Load the settings anyway?';
   var START_OVER = 'Start over with a blank form? Your saved settings in this browser will be cleared.';
@@ -990,8 +1024,8 @@
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
-    // Once the click has started the download.
-    setTimeout(function () { URL.revokeObjectURL(url); }, 0);
+    // Once the click has started the download; Safari needs a moment.
+    setTimeout(function () { URL.revokeObjectURL(url); }, 1000);
   }
 
   function copied() {
@@ -1025,13 +1059,23 @@
   }
 
   // Replaces the form with normalizeConfig's result, shared by the settings file and the paste.
+  // Settings the form cannot show leave the form and storage as they were.
+  // Returns whether the settings were loaded.
   function useConfig(normalized, focus) {
-    state.config = fullConfig(normalized.config);
+    var previous = state.config;
+    var loaded = showConfig(function () { return fullConfig(normalized.config); },
+      function () { return previous; });
+    if (!loaded) {
+      showMessage(NOT_LOADED);
+      return false;
+    }
     holdSave = false;
-    restructure(focus);
+    save();
+    focusOn(focus);
     if (normalized.dropped.length) {
       addMessage('Ignored settings this version doesn\'t know: ' + normalized.dropped.join(', '));
     }
+    return true;
   }
 
   function loadConfigText(text) {
@@ -1049,20 +1093,23 @@
 
   // The settings line rebuilds the form. A box whose script differs from what those settings
   // make was edited by hand, and the new paste would lose the edits, so the user decides.
+  // Saying no to the warning changes nothing, messages included.
   function applyPaste(text) {
-    clearMessages();
     var normalized;
     var regenerated;
     try {
       normalized = gen.normalizeConfig(gen.parseSettingsLine(text), manifest);
       regenerated = gen.generate(fullConfig(normalized.config), bundle, manifest);
     } catch (e) {
-      addMessage(e && e.code === 'NEWER_VERSION' ? NEWER_FILE : NOT_TOOL_PASTE);
+      showMessage(e && e.code === 'NEWER_VERSION' ? NEWER_PASTE : NOT_TOOL_PASTE);
       return Promise.resolve();
     }
     if (!gen.bodyMatches(text, regenerated) && !window.confirm(EDITED_PASTE)) return Promise.resolve();
-    pasteArea.hidden = true;
-    useConfig(normalized, function () { return first('#mp-paste-open'); });
+    clearMessages();
+    if (useConfig(normalized, function () { return first('#mp-paste-open'); })) {
+      pasteArea.hidden = true;
+      pasteText.value = '';
+    }
     return Promise.resolve();
   }
 
@@ -1117,13 +1164,5 @@
 
   // Saved settings that cannot be shown must not leave a blank page on every visit: fall back
   // to a blank form. Storage keeps the saved settings until the user changes something.
-  state.config = load();
-  try {
-    renderAll();
-    refreshOutput();
-  } catch (e) {
-    state.config = emptyConfig();
-    renderAll();
-    refreshOutput();
-  }
+  showConfig(load, emptyConfig);
 }());

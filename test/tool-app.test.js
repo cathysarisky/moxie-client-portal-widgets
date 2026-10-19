@@ -477,6 +477,10 @@ test('home layout follows the cards that are on, and lists a card once', async (
   assert.equal(section.hidden, false);
   assert.deepEqual(layout(), ['waiting']);
   assert.match(item('waiting').textContent, /Waiting on you card/);
+  const headings = t.$$('#mp-home-layout h2, #mp-home-layout h3, #mp-home-layout legend');
+  assert.deepEqual(headings.map((n) => n.textContent), ['Home page layout', 'Home page layout'],
+    'one heading, which is also the legend');
+  assert.equal(t.$('#mp-home-layout legend > h2').textContent, 'Home page layout');
   homeCards('[["waiting"]]');
 
   t.$('[data-mp-toggle="home-billing"]').click();
@@ -570,7 +574,7 @@ test('a saved file round-trips', async () => {
   await t.tick(10);
   assert.equal(downloads.blobs.length, 1);
   assert.deepEqual(downloads.links, [{ name: 'moxie-portal-settings.json', href: 'blob:fake' }]);
-  assert.deepEqual(downloads.revoked, ['blob:fake']);
+  assert.deepEqual(downloads.revoked, [], 'kept until the browser has surely started the download');
   assert.equal(t.$$('a[download]').length, 0, 'the temporary link is removed');
   const text = await downloads.blobs[0].text();
   assert.equal(text, JSON.stringify(stored(t), null, 2));
@@ -593,6 +597,8 @@ test('the script downloads as a file', async () => {
   await t.tick(10);
   assert.deepEqual(downloads.links, [{ name: 'moxie-portal-embed.js', href: 'blob:fake' }]);
   assert.equal(await downloads.blobs[0].text(), output(t));
+  assert.deepEqual(downloads.revoked, [], 'kept until the browser has surely started the download');
+  await t.tick(1000);
   assert.deepEqual(downloads.revoked, ['blob:fake']);
   assert.deepEqual(t.errors, []);
 });
@@ -655,6 +661,7 @@ test('paste from Moxie rebuilds the form', async () => {
   assert.equal(count(out, 'var ONLY_FOR = {"ClientType":"Agency"};'), 1);
   assert.equal(stored(t).snippets.length, 2);
   assert.equal(t.$('#mp-paste').hidden, true);
+  assert.equal(t.$('#mp-paste-text').value, '', 'the old paste is not left in the box');
   assert.equal(messages(t), '');
   assert.deepEqual(t.errors, []);
 });
@@ -671,6 +678,90 @@ test('an edited box warns first', async () => {
   await t.window.__mpTool.applyPaste(TWO_CSS_PASTE + '\n(function(){})();');
   assert.equal(asked.length, 2);
   assert.equal(t.$$('[data-mp-snippet="custom-css"]').length, 2);
+  assert.deepEqual(t.errors, []);
+});
+
+test('saying no to the edited-box warning changes nothing, messages included', async () => {
+  const t = await openTool();
+  t.$('[data-mp-toggle="nav-tasks-link"]').click();
+  await t.window.__mpTool.loadConfigText('not json');
+  const before = { messages: messages(t), output: output(t), stored: stored(t) };
+  t.window.confirm = () => false;
+  t.$('#mp-paste-open').click();
+  const edited = TWO_CSS_PASTE + '\n(function(){})();';
+  t.$('#mp-paste-text').value = edited;
+  t.$('#mp-paste-apply').click();
+  await t.tick();
+  assert.equal(messages(t), before.messages);
+  assert.equal(output(t), before.output);
+  assert.deepEqual(stored(t), before.stored);
+  assert.equal(t.$('#mp-paste').hidden, false);
+  assert.equal(t.$('#mp-paste-text').value, edited);
+  assert.deepEqual(t.errors, []);
+});
+
+test('a paste from a newer tool says paste, not file', async () => {
+  const t = await openTool();
+  await t.window.__mpTool.applyPaste('/* MoxiePortal settings: {"moxiePortalTool":2} */');
+  assert.equal(messages(t), 'That paste was made by a newer version of the tool. Reload the page and try again.');
+  assert.equal(t.$$('[data-mp-snippet]').length, 0);
+  assert.deepEqual(t.errors, []);
+});
+
+// After the page is up, the next textarea the app creates throws, as a broken editor would.
+function breakNextTextarea(t) {
+  const create = t.document.createElement;
+  let failed = false;
+  t.document.createElement = function (tag) {
+    if (tag === 'textarea' && !failed) {
+      failed = true;
+      throw new Error('editor failed');
+    }
+    return create.apply(this, arguments);
+  };
+}
+
+test('settings that cannot be shown leave the form as it was', async () => {
+  const t = await openTool();
+  t.$('[data-mp-toggle="nav-tasks-link"]').click();
+  type(t, t.$('[data-mp-field="TASKS_LABEL"] input'), 'Before');
+  const before = { output: output(t), stored: stored(t) };
+  const load = (text) => t.window.__mpTool.loadConfigText(text);
+  const paste = (text) => t.window.__mpTool.applyPaste(text);
+  for (const [name, action] of [['file', load], ['paste', paste]]) {
+    t.$('#mp-paste-open').click();
+    t.$('#mp-paste-text').value = TWO_CSS_PASTE;
+    breakNextTextarea(t);
+    await action(name === 'file' ? JSON.stringify(TWO_CSS) : TWO_CSS_PASTE);
+    assert.equal(messages(t), 'Those settings couldn\'t be loaded.', name);
+    assert.equal(t.$$('[data-mp-snippet="custom-css"]').length, 0, name);
+    assert.equal(t.$('[data-mp-field="TASKS_LABEL"] input').value, 'Before', name);
+    assert.equal(output(t), before.output, name);
+    assert.deepEqual(stored(t), before.stored, name);
+    assert.equal(t.$('#mp-paste-text').value, TWO_CSS_PASTE, name + ': the paste stays to try again');
+  }
+  assert.deepEqual(t.errors, []);
+});
+
+test('the storage note stays while other messages come and go', async () => {
+  const t = await openTool({
+    beforeParse(w) {
+      Object.defineProperty(w, 'localStorage', { get() { throw new Error('blocked'); } });
+    }
+  });
+  const note = 'This browser won\'t remember your settings between visits. To keep them, use the Save settings file button.';
+  assert.equal(t.$('#mp-save-json').textContent, 'Save settings file');
+  const texts = () => t.$$('#mp-messages p').map((p) => p.textContent);
+  assert.deepEqual(texts(), [note]);
+  await t.window.__mpTool.loadConfigText('not json');
+  assert.deepEqual(texts(), [note, 'That file isn\'t a settings file from this tool.']);
+  await t.window.__mpTool.applyPaste('var x = 1;');
+  assert.deepEqual(texts(), [note, 'This doesn\'t look like a paste made by this tool.']);
+  await t.window.__mpTool.applyPaste(TWO_CSS_PASTE);
+  assert.deepEqual(texts(), [note]);
+  t.window.confirm = () => true;
+  t.$('#mp-reset').click();
+  assert.deepEqual(texts(), [note]);
   assert.deepEqual(t.errors, []);
 });
 

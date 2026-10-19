@@ -28,6 +28,8 @@ a { color: var(--mp-accent); }
 .mp-intro, .mp-desc { color: var(--mp-muted); margin: 0 0 1rem; }
 .mp-desc { margin: 0.4rem 0 0; }
 .mp-hidden { display: none; }
+/* Rows of buttons keep a gap when they wrap on a phone. */
+#mp-settings-bar, .mp-buttons { display: flex; flex-wrap: wrap; gap: 0.5rem; }
 [hidden] { display: none !important; }
 
 /* Controls */
