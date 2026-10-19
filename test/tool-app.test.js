@@ -1,0 +1,200 @@
+'use strict';
+const test = require('node:test');
+const assert = require('node:assert/strict');
+const { openTool, STORAGE_KEY } = require('./tool-helpers.js');
+const manifest = require('../tool/manifest.js');
+
+function output(t) {
+  return t.$('#mp-output').value;
+}
+
+function count(text, part) {
+  return text.split(part).length - 1;
+}
+
+function type(t, input, value) {
+  input.value = value;
+  input.dispatchEvent(new t.window.Event('input', { bubbles: true }));
+}
+
+function stored(t) {
+  return JSON.parse(t.window.localStorage.getItem(STORAGE_KEY));
+}
+
+async function twoCssCopies() {
+  const t = await openTool();
+  t.$('[data-mp-toggle="custom-css"]').click();
+  t.$('[data-mp-add-copy="custom-css"]').click();
+  const second = t.$$('[data-mp-snippet="custom-css"]')[1];
+  type(t, second.querySelector('[data-mp-field="ONLY_FOR"] .mp-filter-key'), 'ClientType');
+  type(t, second.querySelector('[data-mp-field="ONLY_FOR"] .mp-filter-value'), 'Agency');
+  return t;
+}
+
+test('a fresh page generates the parent only', async () => {
+  const t = await openTool();
+  const out = output(t);
+  assert.ok(out.startsWith('/* MoxiePortal settings:'));
+  assert.ok(out.includes('var CLIENT_FILTER = null;'));
+  assert.ok(!out.includes('MoxiePortal.ready('));
+  assert.equal(t.$$('[data-mp-snippet]').length, 0);
+  assert.deepEqual(t.errors, []);
+});
+
+test('turning a snippet on adds its block, with its defaults', async () => {
+  const t = await openTool();
+  t.$('[data-mp-toggle="nav-tasks-link"]').click();
+  assert.ok(output(t).includes('var TASKS_LABEL = "Tasks";'));
+  assert.equal(t.$$('[data-mp-snippet="nav-tasks-link"]').length, 1);
+  assert.deepEqual(t.errors, []);
+});
+
+test('each snippet card shows its name, description and README link', async () => {
+  const t = await openTool();
+  const toggle = t.$('[data-mp-toggle="nav-tasks-link"]');
+  const card = toggle.closest('.mp-card');
+  assert.match(card.querySelector('h3').textContent, /Tasks menu link/);
+  assert.match(card.textContent, /opens the client's task board/);
+  const link = card.querySelector('a');
+  assert.equal(link.getAttribute('href'), 'https://github.com/cathysarisky/moxie-client-portal-widgets#nav-tasks-link');
+  assert.equal(t.$$('[data-mp-toggle]').length, manifest.snippets.length);
+});
+
+test('labels use plain words, never setting names', async () => {
+  const t = await openTool();
+  manifest.snippets.forEach((s) => t.$('[data-mp-toggle="' + s.id + '"]').click());
+  const names = [];
+  manifest.parent.settings.concat(...manifest.snippets.map((s) => s.settings))
+    .forEach((d) => names.push(d.name));
+  const texts = t.$$('label, legend, .mp-label').map((n) => n.textContent);
+  assert.ok(texts.length > 20);
+  texts.forEach((text) => {
+    names.forEach((name) => assert.ok(!text.includes(name), name + ' in label "' + text + '"'));
+  });
+  assert.equal(t.$('#mp-parent [data-mp-field="HOME_CARDS"]'), null);
+  assert.deepEqual(t.errors, []);
+});
+
+test('editing a text field updates the output and storage', async () => {
+  const t = await openTool();
+  t.$('[data-mp-toggle="nav-tasks-link"]').click();
+  type(t, t.$('[data-mp-field="TASKS_LABEL"] input'), 'To do');
+  assert.ok(output(t).includes('"To do"'));
+  assert.equal(stored(t).snippets[0].settings.TASKS_LABEL, 'To do');
+});
+
+test('adding a copy adds a second block with its own filter', async () => {
+  const t = await twoCssCopies();
+  assert.equal(t.$$('[data-mp-snippet="custom-css"]').length, 2);
+  const out = output(t);
+  assert.equal(count(out, 'var CSS = '), 2);
+  assert.equal(count(out, 'var ONLY_FOR = {"ClientType":"Agency"};'), 1);
+  assert.equal(count(out, 'var ONLY_FOR = null;'), 1);
+  t.$$('[data-mp-snippet="custom-css"] [data-mp-remove]').forEach((b) => assert.equal(b.hidden, false));
+  assert.deepEqual(t.errors, []);
+});
+
+test('removing a copy', async () => {
+  const t = await twoCssCopies();
+  t.$$('[data-mp-snippet="custom-css"]')[1].querySelector('[data-mp-remove]').click();
+  const sections = t.$$('[data-mp-snippet="custom-css"]');
+  assert.equal(sections.length, 1);
+  assert.equal(sections[0].querySelector('[data-mp-remove]').hidden, true);
+  const out = output(t);
+  assert.equal(count(out, 'var CSS = '), 1);
+  assert.ok(!out.includes('Agency'));
+  assert.equal(stored(t).snippets.length, 1);
+});
+
+test('turning a snippet off asks first when it has more than one copy', async () => {
+  const t = await twoCssCopies();
+  const asked = [];
+  t.window.confirm = (msg) => { asked.push(msg); return false; };
+  t.$('[data-mp-toggle="custom-css"]').click();
+  assert.equal(asked.length, 1);
+  assert.equal(t.$('[data-mp-toggle="custom-css"]').checked, true);
+  assert.equal(t.$$('[data-mp-snippet="custom-css"]').length, 2);
+  t.window.confirm = (msg) => { asked.push(msg); return true; };
+  t.$('[data-mp-toggle="custom-css"]').click();
+  assert.equal(asked.length, 2);
+  assert.equal(t.$$('[data-mp-snippet="custom-css"]').length, 0);
+  assert.equal(count(output(t), 'var CSS = '), 0);
+  t.$('[data-mp-toggle="nav-tasks-link"]').click();
+  t.$('[data-mp-toggle="nav-tasks-link"]').click();
+  assert.equal(asked.length, 2);
+  assert.equal(t.$$('[data-mp-snippet]').length, 0);
+});
+
+test('focus stays on the control the user just used', async () => {
+  const t = await openTool();
+  t.$('[data-mp-toggle="custom-css"]').click();
+  assert.equal(t.document.activeElement, t.$('[data-mp-toggle="custom-css"]'));
+  t.$('[data-mp-add-copy="custom-css"]').click();
+  const second = t.$$('[data-mp-snippet="custom-css"]')[1];
+  assert.equal(t.document.activeElement, second.querySelector('textarea'));
+  second.querySelector('[data-mp-remove]').click();
+  assert.equal(t.document.activeElement, t.$('[data-mp-add-copy="custom-css"]'));
+});
+
+test('stringList and filter shapes', async () => {
+  const t = await openTool();
+  type(t, t.$('[data-mp-field="WAITING_STATUSES"] textarea'), 'A\n\nB ');
+  assert.ok(output(t).includes('var WAITING_STATUSES = ["A","B"];'));
+  const filter = t.$('[data-mp-field="CLIENT_FILTER"]');
+  type(t, filter.querySelector('.mp-filter-key'), 'Tier');
+  type(t, filter.querySelector('.mp-filter-value'), 'A');
+  assert.ok(output(t).includes('var CLIENT_FILTER = {"Tier":"A"};'));
+  type(t, filter.querySelector('.mp-filter-key'), '');
+  assert.ok(output(t).includes('var CLIENT_FILTER = null;'));
+});
+
+test('size emits numbers for integers and strings otherwise', async () => {
+  const t = await openTool();
+  t.$('[data-mp-toggle="logo"]').click();
+  const input = t.$('[data-mp-field="LOGO_WIDTH"] input');
+  type(t, input, '160');
+  assert.ok(output(t).includes('var LOGO_WIDTH = 160;'));
+  type(t, input, '80%');
+  assert.ok(output(t).includes('var LOGO_WIDTH = "80%";'));
+  type(t, input, '');
+  assert.ok(output(t).includes('var LOGO_WIDTH = "";'));
+});
+
+test('a cleared number falls back to the default and is counted', async () => {
+  const t = await openTool();
+  t.$('[data-mp-toggle="home-projects"]').click();
+  const field = t.$('[data-mp-field="MAX_ROWS"]');
+  type(t, field.querySelector('input'), '3');
+  assert.ok(output(t).includes('var MAX_ROWS = 3;'));
+  assert.equal(t.$('#mp-problems').textContent, '');
+  type(t, field.querySelector('input'), '');
+  assert.ok(output(t).includes('var MAX_ROWS = 5;'));
+  assert.match(t.$('#mp-problems').textContent, /1 /);
+  assert.match(field.querySelector('.mp-problem').textContent, /whole number/);
+});
+
+test('defaultFrom follows its source until edited', async () => {
+  const t = await openTool();
+  t.$('[data-mp-toggle="home-recent"]').click();
+  type(t, t.$('[data-mp-field="DAYS"] input'), '7');
+  assert.ok(output(t).includes('"No updates in the last 7 days."'));
+  assert.equal(t.$('[data-mp-field="EMPTY"] input').value, 'No updates in the last 7 days.');
+  type(t, t.$('[data-mp-field="EMPTY"] input'), 'Quiet.');
+  type(t, t.$('[data-mp-field="DAYS"] input'), '3');
+  assert.ok(output(t).includes('"Quiet."'));
+  assert.ok(!output(t).includes('last 3 days'));
+});
+
+test('state survives a reload', async () => {
+  const t = await openTool({
+    storage: {
+      moxiePortalTool: 1,
+      parent: {},
+      snippets: [{ id: 'nav-tasks-link', settings: { TASKS_LABEL: 'Later' } }]
+    }
+  });
+  assert.equal(t.$('[data-mp-toggle="nav-tasks-link"]').checked, true);
+  assert.ok(output(t).includes('var TASKS_LABEL = "Later";'));
+  assert.equal(t.$('[data-mp-field="TASKS_LABEL"] input').value, 'Later');
+  assert.deepEqual(t.errors, []);
+});

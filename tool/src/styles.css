@@ -1,8 +1,17 @@
+:root {
+  --mp-text: #1c1c1e;
+  --mp-muted: #55555f;
+  --mp-line: #d6d6dd;
+  --mp-input-line: #8e8e99;
+  --mp-card: #fbfbfc;
+  --mp-accent: #0b5cad;
+  --mp-problem: #a1161a;
+}
 * { box-sizing: border-box; }
 body {
   margin: 0;
   font: 16px/1.5 system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
-  color: #1c1c1e;
+  color: var(--mp-text);
   background: #fff;
 }
 body > header, body > main {
@@ -10,8 +19,72 @@ body > header, body > main {
   margin: 0 auto;
   padding: 0 16px;
 }
+main { padding-bottom: 3rem; }
 h1 { font-size: 1.5rem; line-height: 1.25; margin: 1.5rem 0 0.75rem; }
-h2 { font-size: 1.2rem; margin: 1.5rem 0 0.5rem; }
-textarea { width: 100%; font: 13px/1.4 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; }
-button { font: inherit; }
+h2 { font-size: 1.2rem; margin: 2rem 0 0.5rem; }
+h3 { font-size: 1.05rem; margin: 0; }
+h4 { font-size: 0.95rem; margin: 0 0 0.75rem; color: var(--mp-muted); }
+a { color: var(--mp-accent); }
+.mp-intro, .mp-desc { color: var(--mp-muted); margin: 0 0 1rem; }
+.mp-desc { margin: 0.4rem 0 0; }
 .mp-hidden { display: none; }
+
+/* Controls */
+input[type="text"], input[type="number"], textarea {
+  display: block;
+  width: 100%;
+  padding: 0.45rem 0.6rem;
+  border: 1px solid var(--mp-input-line);
+  border-radius: 6px;
+  background: #fff;
+  color: inherit;
+  font: inherit;
+}
+textarea { resize: vertical; }
+textarea.mp-code, #mp-output { font: 13px/1.4 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; }
+input.mp-short { max-width: 10rem; }
+button {
+  font: inherit;
+  padding: 0.4rem 0.85rem;
+  border: 1px solid var(--mp-input-line);
+  border-radius: 6px;
+  background: #f2f2f5;
+  color: inherit;
+  cursor: pointer;
+}
+button:hover { background: #e6e6eb; }
+button.mp-small { font-size: 0.875rem; padding: 0.25rem 0.6rem; }
+input[type="checkbox"] { width: 1.15rem; height: 1.15rem; margin: 0; accent-color: var(--mp-accent); }
+:focus-visible { outline: 3px solid var(--mp-accent); outline-offset: 2px; }
+input[type="text"]:focus-visible, input[type="number"]:focus-visible, textarea:focus-visible { outline-offset: 0; }
+
+/* Fields */
+.mp-field { margin: 0 0 1.1rem; }
+fieldset.mp-field { border: 0; padding: 0; min-width: 0; }
+.mp-label { display: block; font-weight: 600; margin: 0 0 0.3rem; padding: 0; }
+.mp-help { margin: 0.3rem 0 0; font-size: 0.875rem; color: var(--mp-muted); }
+.mp-problem { margin: 0.3rem 0 0; font-size: 0.875rem; font-weight: 600; color: var(--mp-problem); }
+#mp-problems { font-weight: 600; color: var(--mp-problem); }
+#mp-problems:empty { display: none; }
+
+/* Client filter rows */
+.mp-filter-row { display: flex; flex-wrap: wrap; align-items: center; gap: 0.5rem; margin: 0 0 0.5rem; }
+.mp-filter-row input { flex: 1 1 8rem; width: auto; min-width: 0; }
+.mp-filter-is { color: var(--mp-muted); }
+
+/* Snippet cards */
+.mp-card {
+  border: 1px solid var(--mp-line);
+  border-radius: 10px;
+  padding: 1rem;
+  margin: 0 0 1rem;
+  background: var(--mp-card);
+}
+.mp-card.mp-on { background: #fff; border-color: var(--mp-input-line); }
+.mp-card h3 label { display: flex; align-items: center; gap: 0.6rem; cursor: pointer; }
+.mp-copy { border-top: 1px solid var(--mp-line); margin-top: 1rem; padding-top: 1rem; }
+.mp-copy + button { margin-top: 0.25rem; }
+
+@media (max-width: 420px) {
+  .mp-card { padding: 0.75rem; }
+}
